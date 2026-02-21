@@ -3,10 +3,10 @@
 ## Phase 1: Core Status Reporting + Basic RCA (Weeks 1-6)
 
 ### 1.1 Project Setup
-- [ ] Initialize Python project with pyproject.toml (Python 3.11+)
-- [ ] Set up FastAPI backend skeleton with `uvicorn` entry point
-- [ ] Create requirements.txt with all dependencies (fastapi, uvicorn[standard], sse-starlette, langgraph, langchain, langchain-openai, langchain-community, sqlalchemy, pymysql, pydantic, python-dotenv, httpx, cryptography, sqlparse)
-- [ ] Create .env.example with all required variables
+- [x] Initialize Python project with pyproject.toml (Python 3.11+)
+- [x] Set up FastAPI backend skeleton with `uvicorn` entry point
+- [x] Create requirements.txt with all dependencies (fastapi, uvicorn[standard], sse-starlette, langgraph, langchain, langchain-openai, langchain-community, sqlalchemy, pymysql, pydantic, python-dotenv, httpx, cryptography, sqlparse)
+- [x] Create .env.example with all required variables
 - [ ] Set up React + TypeScript frontend with Vite (runs separately via `npm run dev`)
 - [ ] Configure SQLAlchemy connection pools for both databases (FINEGRAINED_WORKFLOW, airflow)
 - [ ] Verify RDS connectivity with test queries

@@ -8,7 +8,6 @@ Usage:
     python tests/test_tools.py
 """
 
-import asyncio
 import os
 import sys
 
@@ -34,7 +33,7 @@ from agent.tools.task_tools import get_task_details
 TEST_BUSINESS_DATE = "2026-02-13"
 
 
-async def test_trigger_type_mapping() -> bool:
+def test_trigger_type_mapping() -> bool:
     """Verify TRIGGER_TYPE mapping is correct and bidirectional."""
     print("--- TRIGGER_TYPE Mapping ---")
     expected = {
@@ -54,11 +53,11 @@ async def test_trigger_type_mapping() -> bool:
     return ok
 
 
-async def test_batch_status_derivatives(svc: LenzService) -> bool:
+def test_batch_status_derivatives(svc: LenzService) -> bool:
     """Test get_batch_status for TB-Derivatives on a recent business date."""
     print(f"--- get_batch_status (DERIVATIVES, {TEST_BUSINESS_DATE}) ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
         dataset_ids = defn.dataset_ids
         print(f"  Resolved {len(dataset_ids)} dataset IDs from Lenz")
 
@@ -100,11 +99,11 @@ async def test_batch_status_derivatives(svc: LenzService) -> bool:
         return False
 
 
-async def test_batch_status_with_processing_type(svc: LenzService) -> bool:
+def test_batch_status_with_processing_type(svc: LenzService) -> bool:
     """Test get_batch_status with PRELIM filter."""
     print(f"--- get_batch_status (DERIVATIVES, PRELIM, {TEST_BUSINESS_DATE}) ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
         dataset_ids = defn.dataset_ids
 
         result = get_batch_status(
@@ -135,11 +134,11 @@ async def test_batch_status_with_processing_type(svc: LenzService) -> bool:
         return False
 
 
-async def test_batch_status_with_status_filter(svc: LenzService) -> bool:
+def test_batch_status_with_status_filter(svc: LenzService) -> bool:
     """Test get_batch_status with status filter."""
     print(f"--- get_batch_status (DERIVATIVES, status=FAILED, {TEST_BUSINESS_DATE}) ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
         dataset_ids = defn.dataset_ids
 
         result = get_batch_status(
@@ -170,7 +169,7 @@ async def test_batch_status_with_status_filter(svc: LenzService) -> bool:
         return False
 
 
-async def test_batch_status_empty_datasets() -> bool:
+def test_batch_status_empty_datasets() -> bool:
     """Test get_batch_status with empty dataset list returns cleanly."""
     print("--- get_batch_status (empty datasets) ---")
     result = get_batch_status(dataset_ids=[], business_date=TEST_BUSINESS_DATE)
@@ -179,11 +178,11 @@ async def test_batch_status_empty_datasets() -> bool:
     return ok
 
 
-async def test_batch_progress(svc: LenzService) -> bool:
+def test_batch_progress(svc: LenzService) -> bool:
     """Test get_batch_progress for sequence-aware progress tracking."""
     print(f"--- get_batch_progress (DERIVATIVES, {TEST_BUSINESS_DATE}) ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
         essential_dict = defn.model_dump()
 
         result = get_batch_progress(
@@ -224,11 +223,11 @@ async def test_batch_progress(svc: LenzService) -> bool:
         return False
 
 
-async def test_slice_status(svc: LenzService) -> bool:
+def test_slice_status(svc: LenzService) -> bool:
     """Test get_slice_status with known slice patterns from Lenz."""
     print(f"--- get_slice_status (DERIVATIVES, {TEST_BUSINESS_DATE}) ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
 
         # Find a dataset with slices
         target = None
@@ -265,11 +264,11 @@ async def test_slice_status(svc: LenzService) -> bool:
         return False
 
 
-async def test_task_details(svc: LenzService) -> bool:
+def test_task_details(svc: LenzService) -> bool:
     """Test get_task_details by first finding a DAG_RUN_ID from batch status."""
     print(f"--- get_task_details ({TEST_BUSINESS_DATE}) ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
         dataset_ids = defn.dataset_ids
 
         # Get a DAG_RUN_ID from batch status
@@ -315,11 +314,11 @@ async def test_task_details(svc: LenzService) -> bool:
         return False
 
 
-async def test_task_details_with_state_filter(svc: LenzService) -> bool:
+def test_task_details_with_state_filter(svc: LenzService) -> bool:
     """Test get_task_details with a state filter."""
     print(f"--- get_task_details (state_filter=['failed'], {TEST_BUSINESS_DATE}) ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
         dataset_ids = defn.dataset_ids
 
         batch_result = get_batch_status(
@@ -360,7 +359,7 @@ async def test_task_details_with_state_filter(svc: LenzService) -> bool:
         return False
 
 
-async def test_task_details_empty_run_id() -> bool:
+def test_task_details_empty_run_id() -> bool:
     """Test get_task_details with empty run_id returns cleanly."""
     print("--- get_task_details (empty run_id) ---")
     result = get_task_details(dag_run_id="")
@@ -369,11 +368,11 @@ async def test_task_details_empty_run_id() -> bool:
     return ok
 
 
-async def test_historical_runs(svc: LenzService) -> bool:
+def test_historical_runs(svc: LenzService) -> bool:
     """Test get_historical_runs for a known dataset."""
     print("--- get_historical_runs ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
         if not defn.datasets:
             print("  SKIP: No datasets")
             return True
@@ -415,43 +414,43 @@ async def test_historical_runs(svc: LenzService) -> bool:
         return False
 
 
-async def main() -> None:
+def main() -> None:
     print("Testing Tier 1 Tools...\n")
     svc = LenzService()
 
     results: list[tuple[str, bool]] = []
 
-    results.append(("TRIGGER_TYPE Mapping", await test_trigger_type_mapping()))
+    results.append(("TRIGGER_TYPE Mapping", test_trigger_type_mapping()))
     print()
 
-    results.append(("Batch Status (empty)", await test_batch_status_empty_datasets()))
+    results.append(("Batch Status (empty)", test_batch_status_empty_datasets()))
     print()
 
-    results.append(("Task Details (empty)", await test_task_details_empty_run_id()))
+    results.append(("Task Details (empty)", test_task_details_empty_run_id()))
     print()
 
-    results.append(("Batch Status (DERIV)", await test_batch_status_derivatives(svc)))
+    results.append(("Batch Status (DERIV)", test_batch_status_derivatives(svc)))
     print()
 
-    results.append(("Batch Status (PRELIM)", await test_batch_status_with_processing_type(svc)))
+    results.append(("Batch Status (PRELIM)", test_batch_status_with_processing_type(svc)))
     print()
 
-    results.append(("Batch Status (FAILED)", await test_batch_status_with_status_filter(svc)))
+    results.append(("Batch Status (FAILED)", test_batch_status_with_status_filter(svc)))
     print()
 
-    results.append(("Batch Progress", await test_batch_progress(svc)))
+    results.append(("Batch Progress", test_batch_progress(svc)))
     print()
 
-    results.append(("Slice Status", await test_slice_status(svc)))
+    results.append(("Slice Status", test_slice_status(svc)))
     print()
 
-    results.append(("Task Details", await test_task_details(svc)))
+    results.append(("Task Details", test_task_details(svc)))
     print()
 
-    results.append(("Task Details (filter)", await test_task_details_with_state_filter(svc)))
+    results.append(("Task Details (filter)", test_task_details_with_state_filter(svc)))
     print()
 
-    results.append(("Historical Runs", await test_historical_runs(svc)))
+    results.append(("Historical Runs", test_historical_runs(svc)))
     print()
 
     print("=" * 60)
@@ -471,4 +470,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

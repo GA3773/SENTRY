@@ -135,7 +135,7 @@ class LenzService:
     # API calls
     # ------------------------------------------------------------------
 
-    async def get_essential_definition(self, name: str) -> EssentialDef:
+    def get_essential_definition(self, name: str) -> EssentialDef:
         """Resolve user input to an essential name and fetch its definition.
 
         Args:
@@ -165,21 +165,21 @@ class LenzService:
         self._cache_set(essential_name, definition)
         return definition
 
-    async def get_dataset_ids(self, name: str) -> list[str]:
+    def get_dataset_ids(self, name: str) -> list[str]:
         """Get all dataset IDs for an essential."""
-        definition = await self.get_essential_definition(name)
+        definition = self.get_essential_definition(name)
         return definition.dataset_ids
 
-    async def get_datasets_by_sequence(
+    def get_datasets_by_sequence(
         self, name: str
     ) -> dict[int, list[DatasetDef]]:
         """Get datasets grouped by sequence order."""
-        definition = await self.get_essential_definition(name)
+        definition = self.get_essential_definition(name)
         return definition.datasets_by_sequence()
 
-    async def get_valid_slices(self, name: str, dataset_id: str) -> list[str]:
+    def get_valid_slices(self, name: str, dataset_id: str) -> list[str]:
         """Get all valid slice names for a specific dataset within an essential."""
-        definition = await self.get_essential_definition(name)
+        definition = self.get_essential_definition(name)
         dataset = next(
             (d for d in definition.datasets if d.dataset_id == dataset_id), None
         )
@@ -187,7 +187,7 @@ class LenzService:
             return []
         return dataset.all_slices
 
-    async def prefetch_all(self) -> None:
+    def prefetch_all(self) -> None:
         """Pre-fetch definitions for all known essentials."""
         unique_names = set(ESSENTIAL_MAP.values())
         for essential_name in sorted(unique_names):

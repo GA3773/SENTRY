@@ -6,7 +6,6 @@ Usage:
     python tests/test_lenz_service.py
 """
 
-import asyncio
 import os
 import sys
 
@@ -15,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from services.lenz_service import LenzService, resolve_essential_name, resolve_slice_filter
 
 
-async def test_name_resolution() -> bool:
+def test_name_resolution() -> bool:
     """Test ESSENTIAL_MAP name resolution."""
     print("--- Name Resolution ---")
     cases = {
@@ -37,11 +36,11 @@ async def test_name_resolution() -> bool:
     return all_ok
 
 
-async def test_tb_derivatives(svc: LenzService) -> bool:
+def test_tb_derivatives(svc: LenzService) -> bool:
     """Fetch TB-Derivatives and inspect datasets."""
     print("--- TB-Derivatives ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
         print(f"  Essential: {defn.essential_name}")
         print(f"  Dataset count: {len(defn.datasets)}")
         print(f"  Dataset IDs:")
@@ -58,11 +57,11 @@ async def test_tb_derivatives(svc: LenzService) -> bool:
         return False
 
 
-async def test_snu(svc: LenzService) -> bool:
+def test_snu(svc: LenzService) -> bool:
     """Fetch SNU and verify it has 22+ datasets with mixed namespaces."""
     print("--- SNU ---")
     try:
-        defn = await svc.get_essential_definition("SNU")
+        defn = svc.get_essential_definition("SNU")
         print(f"  Essential: {defn.essential_name}")
         print(f"  Dataset count: {len(defn.datasets)}")
 
@@ -83,12 +82,12 @@ async def test_snu(svc: LenzService) -> bool:
         return False
 
 
-async def test_snu_strategic_different(svc: LenzService) -> bool:
+def test_snu_strategic_different(svc: LenzService) -> bool:
     """Verify SNU and SNU-Strategic return different dataset sets."""
     print("--- SNU vs SNU-Strategic ---")
     try:
-        snu = await svc.get_essential_definition("SNU")
-        strategic = await svc.get_essential_definition("SNU STRATEGIC")
+        snu = svc.get_essential_definition("SNU")
+        strategic = svc.get_essential_definition("SNU STRATEGIC")
         snu_ids = set(snu.dataset_ids)
         strategic_ids = set(strategic.dataset_ids)
         different = snu_ids != strategic_ids
@@ -103,11 +102,11 @@ async def test_snu_strategic_different(svc: LenzService) -> bool:
         return False
 
 
-async def test_slice_resolution(svc: LenzService) -> bool:
+def test_slice_resolution(svc: LenzService) -> bool:
     """Test fuzzy slice matching on first dataset that has slices."""
     print("--- Slice Resolution ---")
     try:
-        defn = await svc.get_essential_definition("DERIVATIVES")
+        defn = svc.get_essential_definition("DERIVATIVES")
 
         # Find first dataset that actually HAS slices
         target_dataset = None
@@ -142,25 +141,25 @@ async def test_slice_resolution(svc: LenzService) -> bool:
         return False
 
 
-async def main() -> None:
+def main() -> None:
     print("Testing Lenz Service...\n")
     svc = LenzService()
 
     results = [
-        ("Name Resolution", await test_name_resolution()),
+        ("Name Resolution", test_name_resolution()),
     ]
     print()
 
-    results.append(("TB-Derivatives", await test_tb_derivatives(svc)))
+    results.append(("TB-Derivatives", test_tb_derivatives(svc)))
     print()
 
-    results.append(("SNU", await test_snu(svc)))
+    results.append(("SNU", test_snu(svc)))
     print()
 
-    results.append(("SNU vs SNU-Strategic", await test_snu_strategic_different(svc)))
+    results.append(("SNU vs SNU-Strategic", test_snu_strategic_different(svc)))
     print()
 
-    results.append(("Slice Resolution", await test_slice_resolution(svc)))
+    results.append(("Slice Resolution", test_slice_resolution(svc)))
     print()
 
     print("=" * 50)
@@ -180,4 +179,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

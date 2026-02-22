@@ -6,13 +6,33 @@ Connection pattern follows: https://raw.githubusercontent.com/GA3773/Comm/refs/h
 
 SENTRY runs locally for Phase 1. RDS connectivity details (host, port, user, password, PEM file) will be provided separately and stored as environment variables — NEVER hardcode.
 
+### IAM Token Authentication
+
+The RDS password is NOT a static password — it's an **IAM authentication token** generated via:
+```bash
+aws rds generate-db-auth-token \
+    --hostname <rds-host> \
+    --port 6150 \
+    --username AuroraReadWrite \
+    --region us-east-1
+```
+
+**Token expiry: ~15 minutes.** You must regenerate and re-paste into `.env` when it expires. When connections start failing with auth errors, regenerate the token.
+
+**CRITICAL: Wrap in single quotes in .env** — the token contains `&`, `=`, `%`, `?` characters that will break without quoting:
+```
+RDS_PASSWORD='fgwrds-prod-node-0...&X-Amz-Algorithm=AWS4-HMAC-SHA256&...'
+```
+
+The password must also be **URL-encoded** when building the SQLAlchemy connection string, since it contains special characters:
+
 ```python
 # .env (NEVER commit this file)
 RDS_HOST=<provided>
-RDS_PORT=3306
-RDS_USER=<provided>
-RDS_PASSWORD=<provided>
-RDS_PEM_PATH=<path_to_pem_file>
+RDS_PORT=6150
+RDS_USER=AuroraReadWrite
+RDS_PASSWORD='<iam-token-in-single-quotes>'
+RDS_PEM_PATH=rds.pem
 FGW_DATABASE=FINEGRAINED_WORKFLOW
 AIRFLOW_DATABASE=airflow
 ```
@@ -21,22 +41,43 @@ AIRFLOW_DATABASE=airflow
 ```python
 import os
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from sqlalchemy.pool import QueuePool
-import ssl
 
 def create_rds_engine(database: str):
-    """Create a READ-ONLY connection pool to RDS MySQL."""
-    ssl_context = ssl.create_default_context(cafile=os.getenv("RDS_PEM_PATH"))
+    """Create a READ-ONLY connection pool to RDS MySQL via NLB."""
     
+    # Use URL.create() — NEVER build URL via f-string.
+    # The IAM token password contains :, /, ?, &, @ characters that break URL parsing
+    # even with quote_plus(). URL.create() passes credentials as separate components.
+    url = URL.create(
+        drivername="mysql+pymysql",
+        username=os.getenv("RDS_USER"),
+        password=os.getenv("RDS_PASSWORD"),  # raw IAM token, no encoding needed
+        host=os.getenv("RDS_HOST"),           # NLB endpoint, NOT raw RDS node
+        port=int(os.getenv("RDS_PORT", "6150")),
+        database=database,
+    )
+    
+    # SSL: The NLB endpoint may not require SSL certificate.
+    # If MySQL Workbench connects without a cert, the Python client can too.
+    # Only add ssl args if RDS_PEM_PATH is set and the file exists.
+    connect_args = {}
+    pem_path = os.getenv("RDS_PEM_PATH")
+    if pem_path and os.path.exists(pem_path):
+        import ssl
+        ssl_context = ssl.create_default_context(cafile=pem_path)
+        connect_args["ssl"] = ssl_context
+
     engine = create_engine(
-        f"mysql+pymysql://{os.getenv('RDS_USER')}:{os.getenv('RDS_PASSWORD')}"
-        f"@{os.getenv('RDS_HOST')}:{os.getenv('RDS_PORT')}/{database}",
-        connect_args={"ssl": ssl_context},
+        url,
+        connect_args=connect_args,
         poolclass=QueuePool,
         pool_size=5,
         max_overflow=10,
         pool_timeout=30,
-        pool_recycle=1800,
+        pool_recycle=600,   # Recycle connections every 10 min (token expires in ~15)
+        pool_pre_ping=True, # Verify connection is alive before using
         echo=False
     )
     return engine
@@ -46,36 +87,150 @@ fgw_engine = create_rds_engine("FINEGRAINED_WORKFLOW")
 airflow_engine = create_rds_engine("airflow")
 ```
 
+### Key Decisions
+- **Host is the NLB endpoint** (`nlb-qomo-...elb.us-east-1.amazonaws.com`), NOT the raw RDS node (`fgwrds-prod-node-0...rds.amazonaws.com`). The raw node may not be reachable from local.
+- **URL.create() is mandatory** — f-string URL building breaks even with `quote_plus()` because the IAM token can contain `%`, `@`, and other sequences that SQLAlchemy's URL parser misinterprets.
+- **SSL is optional** — if MySQL Workbench connects through the NLB without a certificate, Python can too. The code tries SSL if `RDS_PEM_PATH` is set, otherwise connects without it.
+
 ### CRITICAL: All connections must be READ-ONLY
 Use a MySQL user with SELECT-only privileges. If not available, the application code must enforce read-only at the query validation layer (see @docs/query-tier-system.md).
 
 ## Azure OpenAI Connection
 
-Connection pattern follows: https://raw.githubusercontent.com/GA3773/COST_AGENT_AWS/refs/heads/main/services/azure_openai.py
+Connection pattern follows EXACTLY: https://raw.githubusercontent.com/GA3773/COST_AGENT_AWS/refs/heads/main/services/azure_openai.py
 
-Use the EXACT same method — do not use direct OpenAI SDK, use Azure-specific endpoint.
+Uses **hybrid authentication**: SPN certificate for Bearer token + API key. Both are sent on every request. A fresh client with a fresh token is created per graph invocation to avoid token expiry.
 
 ```python
 # .env
+AZURE_TENANT_ID=<provided>
+AZURE_SPN_CLIENT_ID=<provided>
+AZURE_PEM_PATH=<path_to_spn_cert.pem>
 AZURE_OPENAI_API_KEY=<provided>
 AZURE_OPENAI_ENDPOINT=<provided>
-AZURE_OPENAI_API_VERSION=2024-02-15-preview
-AZURE_OPENAI_DEPLOYMENT_NAME=<provided>  # GPT-4o deployment
+AZURE_OPENAI_API_VERSION=2024-02-01
+AZURE_OPENAI_DEPLOYMENT=<provided>
+AZURE_USER_ID=<provided>
 ```
+
+### Authentication Pattern (EXACT — copy this structure)
 
 ```python
+"""Azure OpenAI client factory with hybrid authentication.
+
+Authentication flow:
+1. Service Principal authenticates with Azure AD using PEM certificate
+2. Azure AD returns an access token
+3. Access token is sent as Bearer token in Authorization header
+4. OpenAI API key is ALSO sent for authentication
+5. A fresh client with fresh token is created for each graph invocation
+"""
+
+import os
+from datetime import datetime
+from azure.identity import CertificateCredential
 from langchain_openai import AzureChatOpenAI
 
-llm = AzureChatOpenAI(
-    azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-    api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-    api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-    azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
-    temperature=0,       # Deterministic for SQL and status queries
-    max_tokens=4096,
-    timeout=30
-)
+logger = logging.getLogger(__name__)
+
+# Cached credential object (thread-safe, handles token caching internally)
+_credential = None
+
+
+def _get_credential() -> CertificateCredential | None:
+    """Get or create the CertificateCredential for Azure AD authentication."""
+    global _credential
+    if _credential is not None:
+        return _credential
+
+    tenant_id = os.getenv('AZURE_TENANT_ID')
+    client_id = os.getenv('AZURE_SPN_CLIENT_ID')
+    pem_path = os.getenv('AZURE_PEM_PATH')
+
+    if not tenant_id or not client_id:
+        logger.warning("Azure Service Principal credentials not configured")
+        return None
+
+    if not os.path.exists(pem_path):
+        logger.warning(f"PEM certificate not found at {pem_path}")
+        return None
+
+    try:
+        _credential = CertificateCredential(
+            tenant_id=tenant_id,
+            client_id=client_id,
+            certificate_path=pem_path,
+        )
+        logger.info("CertificateCredential created successfully")
+        return _credential
+    except Exception as e:
+        logger.error(f"Failed to create CertificateCredential: {e}")
+        return None
+
+
+def _get_bearer_token() -> str | None:
+    """Get a fresh Azure AD access token for cognitive services."""
+    credential = _get_credential()
+    if not credential:
+        return None
+
+    try:
+        token_response = credential.get_token(
+            "https://cognitiveservices.azure.com/.default"
+        )
+        logger.info(
+            f"Azure AD token obtained, expires at "
+            f"{datetime.fromtimestamp(token_response.expires_on).isoformat()}"
+        )
+        return token_response.token
+    except Exception as e:
+        logger.error(f"Failed to get Azure AD token: {e}")
+        return None
+
+
+def create_llm() -> AzureChatOpenAI:
+    """Create an AzureChatOpenAI instance with hybrid authentication.
+
+    Uses Service Principal + PEM certificate for Bearer token when available,
+    falls back to API key only authentication otherwise.
+
+    Returns a fresh LLM instance with a fresh token (call this before each
+    graph invocation to avoid token expiry during long-running workflows).
+    """
+    endpoint = os.getenv('AZURE_OPENAI_ENDPOINT')
+    api_key = os.getenv('AZURE_OPENAI_API_KEY')
+    api_version = os.getenv('AZURE_OPENAI_API_VERSION', '2024-02-01')
+    deployment = os.getenv('AZURE_OPENAI_DEPLOYMENT')
+    user_id = os.getenv('AZURE_USER_ID', '')
+
+    if not endpoint or not api_key:
+        raise ValueError("AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY must be set")
+
+    # Build default headers
+    default_headers = {"x-ms-useragent": user_id}
+
+    # Try hybrid auth: Bearer token + API key
+    bearer_token = _get_bearer_token()
+    if bearer_token:
+        default_headers["Authorization"] = f"Bearer {bearer_token}"
+        logger.info("Creating AzureChatOpenAI with hybrid auth (Bearer + API key)")
+    else:
+        logger.info("Creating AzureChatOpenAI with API key auth only")
+
+    llm = AzureChatOpenAI(
+        azure_endpoint=endpoint,
+        api_key=api_key,
+        api_version=api_version,
+        azure_deployment=deployment,
+        default_headers=default_headers,
+        temperature=0,
+    )
+
+    return llm
 ```
+
+### CRITICAL USAGE NOTE
+**Call `create_llm()` before each graph invocation** — do NOT cache the LLM instance globally. The Bearer token expires, so a fresh client ensures a fresh token. The `CertificateCredential` itself IS cached (module-level singleton), so re-creating the LLM is cheap — only the token refresh + LLM object creation happens, not a full re-auth.
 
 ## Lenz API Connection
 
@@ -123,20 +278,26 @@ Prerequisites before implementing:
 
 Create a `.env.example` file (commit this, not `.env`):
 ```
-# RDS MySQL
+# RDS MySQL (IAM Token Auth — password expires in ~15 min, regenerate with aws rds generate-db-auth-token)
+# CRITICAL: Wrap RDS_PASSWORD in single quotes — token contains &, =, %, ? characters
+# RDS_HOST is the NLB endpoint, NOT the raw RDS node
 RDS_HOST=
-RDS_PORT=3306
-RDS_USER=
-RDS_PASSWORD=
-RDS_PEM_PATH=
+RDS_PORT=6150
+RDS_USER=AuroraReadWrite
+RDS_PASSWORD=''
+RDS_PEM_PATH=rds.pem
 FGW_DATABASE=FINEGRAINED_WORKFLOW
 AIRFLOW_DATABASE=airflow
 
-# Azure OpenAI
+# Azure OpenAI (Hybrid Auth: SPN Certificate + API Key)
+AZURE_TENANT_ID=
+AZURE_SPN_CLIENT_ID=
+AZURE_PEM_PATH=
 AZURE_OPENAI_API_KEY=
 AZURE_OPENAI_ENDPOINT=
-AZURE_OPENAI_API_VERSION=2024-02-15-preview
-AZURE_OPENAI_DEPLOYMENT_NAME=
+AZURE_OPENAI_API_VERSION=2024-02-01
+AZURE_OPENAI_DEPLOYMENT=
+AZURE_USER_ID=
 
 # Lenz API
 LENZ_API_BASE_URL=https://lenz-app.prod.aws.jpmchase.net/lenz/essentials
@@ -157,3 +318,4 @@ MAX_QUERY_ROWS=500
 # RDS_INSTANCE_ID=
 # SQS_QUEUE_NAME=
 ```
+

@@ -14,14 +14,14 @@
 - [ ] Set up LangSmith/LangFuse for agent tracing
 
 ### 1.2 Lenz Service
-- [ ] Implement LenzService class with caching (@docs/lenz-integration.md)
-- [ ] Implement ESSENTIAL_MAP name resolution with fuzzy matching
-- [ ] Implement Lenz API response parser (handle all 3 sliceGroups formats)
-- [ ] Implement EssentialDef and DatasetDef Pydantic models
-- [ ] Implement cache with TTL (default 300s)
-- [ ] Pre-fetch all essentials on startup
+- [x] Implement LenzService class with caching (@docs/lenz-integration.md)
+- [x] Implement ESSENTIAL_MAP name resolution with fuzzy matching
+- [x] Implement Lenz API response parser (handle all 3 sliceGroups formats)
+- [x] Implement EssentialDef and DatasetDef Pydantic models
+- [x] Implement cache with TTL (default 300s)
+- [x] Pre-fetch all essentials on startup
 - [ ] Add /api/lenz/refresh endpoint for manual cache invalidation
-- [ ] Write tests: name resolution, response parsing, cache behavior
+- [x] Write tests: name resolution, response parsing, cache behavior
 
 ### 1.3 Tier 1 Tools (Parameterized Queries)
 - [ ] Implement get_batch_status tool

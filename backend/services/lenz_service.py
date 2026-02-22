@@ -4,9 +4,8 @@ Lenz API service for SENTRY.
 Provides batch (Essential) definitions: which datasets belong to a batch,
 their execution sequence, and valid slices per dataset.
 
-The Lenz API is behind ADFS (Windows Integrated Auth / Kerberos).
-Uses requests-negotiate-sspi for Windows SSPI auth — leverages the current
-domain login session automatically (no username/password needed).
+The Lenz API is behind ADFS (form-based OAuth2 login).
+Authentication is handled by lenz_auth.py (session-based, cookie reuse).
 Calls are cached with 5-min TTL so sync requests have negligible impact.
 """
 
@@ -15,12 +14,11 @@ import os
 import time
 from typing import Optional
 
-import requests
 from dotenv import load_dotenv
-from requests_negotiate_sspi import HttpNegotiateAuth
 
 from config.essentials_map import ESSENTIAL_MAP
 from models.lenz import DatasetDef, EssentialDef
+from services.lenz_auth import lenz_fetch
 
 load_dotenv()
 
@@ -107,13 +105,9 @@ def resolve_slice_filter(
 
 
 class LenzService:
-    """Async Lenz API client with in-memory caching."""
+    """Lenz API client with in-memory caching."""
 
     def __init__(self) -> None:
-        self._base_url = os.getenv(
-            "LENZ_API_BASE_URL",
-            "https://lenz-app.prod.aws.jpmchase.net/lenz/essentials",
-        )
         self._ttl = int(os.getenv("LENZ_CACHE_TTL", "300"))
         self._cache: dict[str, dict] = {}
 
@@ -141,37 +135,6 @@ class LenzService:
     # API calls
     # ------------------------------------------------------------------
 
-    async def _fetch_raw(self, essential_name: str) -> dict:
-        """Fetch raw JSON from Lenz API with Windows SSPI Kerberos auth.
-
-        Uses requests-negotiate-sspi which leverages the current Windows
-        domain login session — no credentials needed in .env.
-        Sync call, but Lenz responses are cached so impact is negligible.
-        """
-        url = f"{self._base_url}/def"
-        params = {"name": essential_name}
-
-        auth = HttpNegotiateAuth()
-        response = requests.get(
-            url, params=params, auth=auth, timeout=30, verify=True
-        )
-
-        content_type = response.headers.get("content-type", "")
-        if "json" not in content_type:
-            log.error(
-                "Lenz API returned non-JSON (status=%s, content-type=%s): %s",
-                response.status_code,
-                content_type,
-                response.text[:200],
-            )
-            raise ValueError(
-                f"Lenz API returned {content_type} instead of JSON "
-                f"(status {response.status_code}). Check Kerberos/SSPI auth."
-            )
-
-        response.raise_for_status()
-        return response.json()
-
     async def get_essential_definition(self, name: str) -> EssentialDef:
         """Resolve user input to an essential name and fetch its definition.
 
@@ -194,9 +157,9 @@ class LenzService:
             log.debug("Cache hit for %s", essential_name)
             return cached
 
-        # Fetch from API
+        # Fetch from API via authenticated session
         log.info("Fetching Lenz definition for %s", essential_name)
-        raw = await self._fetch_raw(essential_name)
+        raw = lenz_fetch(essential_name)
         definition = _parse_lenz_response(raw, essential_name)
 
         self._cache_set(essential_name, definition)
@@ -229,9 +192,13 @@ class LenzService:
         unique_names = set(ESSENTIAL_MAP.values())
         for essential_name in sorted(unique_names):
             try:
-                raw = await self._fetch_raw(essential_name)
+                raw = lenz_fetch(essential_name)
                 definition = _parse_lenz_response(raw, essential_name)
                 self._cache_set(essential_name, definition)
-                log.info("Pre-fetched: %s (%d datasets)", essential_name, len(definition.datasets))
+                log.info(
+                    "Pre-fetched: %s (%d datasets)",
+                    essential_name,
+                    len(definition.datasets),
+                )
             except Exception as e:
                 log.warning("Failed to pre-fetch %s: %s", essential_name, e)

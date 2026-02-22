@@ -10,8 +10,8 @@ Before starting, ensure you have installed:
 
 Have these credentials ready (DO NOT paste them into Claude Code chat — only into .env file):
 - RDS MySQL: host, port, username, password, PEM file path
-- Azure OpenAI: API key, endpoint, deployment name
-- AWS: access key ID, secret access key, region
+- Azure OpenAI: tenant ID, SPN client ID, SPN PEM certificate path, API key, endpoint, deployment name, user ID
+- AWS: access key ID, secret access key, region (Phase 4 only — not needed now)
 - Network access to lenz-app.prod.aws.jpmchase.net (JPMC VPN)
 
 ---
@@ -46,7 +46,7 @@ What essentials does SENTRY monitor? What is the tech stack?
 Read @docs/implementation-plan.md section 1.1.
 
 Create the backend project structure under backend/ as defined in CLAUDE.md.
-- pyproject.toml with Python 3.11+ and these dependencies: fastapi, uvicorn[standard], sse-starlette, langgraph, langchain, langchain-openai, langchain-community, sqlalchemy, pymysql, pydantic, python-dotenv, httpx, cryptography, sqlparse
+- pyproject.toml with Python 3.11+ and these dependencies: fastapi, uvicorn[standard], sse-starlette, langgraph, langchain, langchain-openai, langchain-community, sqlalchemy, pymysql, pydantic, python-dotenv, httpx, cryptography, sqlparse, azure-identity
 - Also create requirements.txt with the same dependencies
 - Create the folder structure: agent/ (with nodes/, tools/, graph.py, state.py), services/, config/, api/ (with routes/), models/
 - Create .env.example from @docs/connectivity.md
@@ -82,9 +82,11 @@ Read @docs/connectivity.md and @docs/data-model.md.
 
 Implement backend/services/db_service.py:
 - Create SQLAlchemy connection pools for both databases (FINEGRAINED_WORKFLOW and airflow)
-- Use the RDS connection pattern from https://raw.githubusercontent.com/GA3773/Comm/refs/heads/main/backend/db.py
+- Use the RDS connection pattern from @docs/connectivity.md
 - Load credentials from .env using python-dotenv
-- SSL connection using the PEM file
+- SSL connection using the PEM file (RDS_PEM_PATH)
+- CRITICAL: The RDS_PASSWORD is an IAM auth token — use urllib.parse.quote_plus() to URL-encode it before building the connection string
+- Set pool_recycle=600 (token expires in ~15 min) and pool_pre_ping=True
 - Both connections must be READ-ONLY in practice
 
 Create a test script backend/tests/test_db_connectivity.py that:
@@ -213,12 +215,16 @@ This session builds the complete LangGraph agent WITH LLM integration end-to-end
 STEP 1: Azure OpenAI client (needed by agent nodes)
 
 Implement backend/services/azure_openai.py:
-- Follow the EXACT connection pattern from https://raw.githubusercontent.com/GA3773/COST_AGENT_AWS/refs/heads/main/services/azure_openai.py
-- Create AzureChatOpenAI instance using langchain_openai
-- Load credentials from .env
+- Copy the EXACT pattern from @docs/connectivity.md (Azure OpenAI section)
+- This uses HYBRID authentication: SPN certificate for Bearer token + API key together
+- The flow: CertificateCredential → get_token() → Bearer header + api_key → AzureChatOpenAI
+- Key functions: _get_credential() (cached singleton), _get_bearer_token(), create_llm()
+- CRITICAL: create_llm() must be called BEFORE each graph invocation — do NOT cache the LLM 
+  instance globally. The Bearer token expires. The CertificateCredential itself IS cached.
+- Falls back to API-key-only auth if PEM cert is unavailable
 - temperature=0 for deterministic responses
-- timeout=30
-- Export a get_llm() function that returns the configured instance
+- Load credentials from .env: AZURE_TENANT_ID, AZURE_SPN_CLIENT_ID, AZURE_PEM_PATH, 
+  AZURE_OPENAI_API_KEY, AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT, AZURE_USER_ID
 
 STEP 2: Agent state and nodes
 

@@ -99,7 +99,7 @@ ESSENTIAL_MAP = {
 
 ## Important Gotchas
 - **create_llm() must be called per graph invocation** — do NOT store the LLM as a global singleton. The Bearer token expires. Call `create_llm()` from `azure_openai.py` before each `graph.invoke()`. The CertificateCredential itself is cached internally, so this is cheap.
-- **RDS_PASSWORD is an IAM token, not a static password.** It expires in ~15 minutes. Must be single-quoted in `.env` and URL-encoded via `quote_plus()` in the connection string. `pool_recycle=600` and `pool_pre_ping=True` are mandatory. See @docs/connectivity.md.
+- **RDS_PASSWORD is an IAM token, not a static password.** It lasts 6+ hours. Must be single-quoted in `.env`. `URL.create()` handles encoding. `pool_recycle=18000` and `pool_pre_ping=True` are mandatory. See @docs/connectivity.md.
 - The Lenz API response nests under `"GLOBAL" → {essential_name} → "schemaJson" → "datasets"`
 - Some datasets have `sliceGroups` with named groups (e.g., "DERIV": [...]), others have flat `"slices": [...]`
 - WORKFLOW_RUN_INSTANCE has no explicit `start_time`/`end_time` — derive from CREATED_DATE and UPDATED_DATE

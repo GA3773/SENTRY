@@ -10,7 +10,7 @@
 - [ ] Set up React + TypeScript frontend with Vite (runs separately via `npm run dev`)
 - [x] Configure SQLAlchemy connection pools for both databases (FINEGRAINED_WORKFLOW, airflow)
 - [x] Verify RDS connectivity with test queries
-- [ ] Configure Azure OpenAI client (follow pattern from @docs/connectivity.md)
+- [x] Configure Azure OpenAI client (follow pattern from @docs/connectivity.md)
 - [ ] Set up LangSmith/LangFuse for agent tracing
 
 ### 1.2 Lenz Service
@@ -24,13 +24,13 @@
 - [x] Write tests: name resolution, response parsing, cache behavior
 
 ### 1.3 Tier 1 Tools (Parameterized Queries)
-- [ ] Implement get_batch_status tool
-- [ ] Implement get_task_details tool
-- [ ] Implement get_slice_status tool
-- [ ] Implement get_batch_progress tool (sequence-aware)
-- [ ] Add query timeout (10s) and LIMIT (500) enforcement
-- [ ] Add comprehensive error handling (connection failures, empty results, timeouts)
-- [ ] Write tests with sample data from @docs/data-model.md
+- [x] Implement get_batch_status tool
+- [x] Implement get_task_details tool
+- [x] Implement get_slice_status tool
+- [x] Implement get_batch_progress tool (sequence-aware)
+- [x] Add query timeout (10s) and LIMIT (500) enforcement
+- [x] Add comprehensive error handling (connection failures, empty results, timeouts)
+- [x] Write tests with sample data from @docs/data-model.md
 
 ### 1.4 LangGraph Agent
 - [ ] Define SentryState TypedDict

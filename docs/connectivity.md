@@ -17,7 +17,7 @@ aws rds generate-db-auth-token \
     --region us-east-1
 ```
 
-**Token expiry: ~15 minutes.** You must regenerate and re-paste into `.env` when it expires. When connections start failing with auth errors, regenerate the token.
+**Token lifetime: 6+ hours.** Regenerate and re-paste into `.env` when it eventually expires. When connections start failing with auth errors, regenerate the token.
 
 **CRITICAL: Wrap in single quotes in .env** — the token contains `&`, `=`, `%`, `?` characters that will break without quoting:
 ```
@@ -59,15 +59,21 @@ def create_rds_engine(database: str):
         database=database,
     )
     
-    # SSL: The NLB endpoint may not require SSL certificate.
-    # If MySQL Workbench connects without a cert, the Python client can too.
-    # Only add ssl args if RDS_PEM_PATH is set and the file exists.
-    connect_args = {}
+    # SSL/TLS is MANDATORY for IAM token auth — without it MySQL rejects the token
+    # and pymysql reports "using password: NO".
+    # If a PEM CA cert is provided, use it for full verification.
+    # Otherwise, still enable TLS but skip certificate verification.
+    import ssl
+
     pem_path = os.getenv("RDS_PEM_PATH")
     if pem_path and os.path.exists(pem_path):
-        import ssl
         ssl_context = ssl.create_default_context(cafile=pem_path)
-        connect_args["ssl"] = ssl_context
+    else:
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+
+    connect_args = {"ssl": ssl_context}
 
     engine = create_engine(
         url,
@@ -76,7 +82,7 @@ def create_rds_engine(database: str):
         pool_size=5,
         max_overflow=10,
         pool_timeout=30,
-        pool_recycle=600,   # Recycle connections every 10 min (token expires in ~15)
+        pool_recycle=18000, # Recycle connections every 5 hrs (token lasts 6+ hrs)
         pool_pre_ping=True, # Verify connection is alive before using
         echo=False
     )
@@ -90,7 +96,7 @@ airflow_engine = create_rds_engine("airflow")
 ### Key Decisions
 - **Host is the NLB endpoint** (`nlb-qomo-...elb.us-east-1.amazonaws.com`), NOT the raw RDS node (`fgwrds-prod-node-0...rds.amazonaws.com`). The raw node may not be reachable from local.
 - **URL.create() is mandatory** — f-string URL building breaks even with `quote_plus()` because the IAM token can contain `%`, `@`, and other sequences that SQLAlchemy's URL parser misinterprets.
-- **SSL is optional** — if MySQL Workbench connects through the NLB without a certificate, Python can too. The code tries SSL if `RDS_PEM_PATH` is set, otherwise connects without it.
+- **SSL/TLS is mandatory** — IAM token auth requires an encrypted connection. Without TLS, MySQL rejects the token and pymysql reports "using password: NO". If `RDS_PEM_PATH` is set, full cert verification is used. Otherwise, TLS is still enabled but without cert verification (same as MySQL Workbench auto-negotiation).
 
 ### CRITICAL: All connections must be READ-ONLY
 Use a MySQL user with SELECT-only privileges. If not available, the application code must enforce read-only at the query validation layer (see @docs/query-tier-system.md).
@@ -234,18 +240,29 @@ def create_llm() -> AzureChatOpenAI:
 
 ## Lenz API Connection
 
+The Lenz API is behind JPMC's ADFS (Active Directory Federation Services) authentication, using Windows Integrated Authentication (NTLM).
+
 ```python
 # .env
 LENZ_API_BASE_URL=https://lenz-app.prod.aws.jpmchase.net/lenz/essentials
+LENZ_USERNAME=<JPMC SID — e.g. I792420>
+LENZ_PASSWORD=<JPMC password>
+LENZ_CACHE_TTL=300
 ```
 
-No special auth required for Lenz API (assumes network-level access within JPMC network). If auth is needed, add bearer token support.
+### Authentication Pattern
 
+Primary approach — async httpx with NTLM:
 ```python
+import os
 import httpx
+from httpx_ntlm import HttpNtlmAuth
 
 async def fetch_essential_def(essential_name: str) -> dict:
-    async with httpx.AsyncClient(timeout=10) as client:
+    """Fetch essential definition from Lenz API with NTLM auth."""
+    auth = HttpNtlmAuth(os.getenv("LENZ_USERNAME"), os.getenv("LENZ_PASSWORD"))
+    
+    async with httpx.AsyncClient(auth=auth, timeout=30, follow_redirects=True) as client:
         response = await client.get(
             f"{os.getenv('LENZ_API_BASE_URL')}/def",
             params={"name": essential_name}
@@ -253,6 +270,28 @@ async def fetch_essential_def(essential_name: str) -> dict:
         response.raise_for_status()
         return response.json()
 ```
+
+**If `httpx-ntlm` doesn't work** (some ADFS configs reject async NTLM), fall back to sync `requests` + `requests-ntlm`:
+
+```python
+import requests
+from requests_ntlm import HttpNtlmAuth as RequestsNtlmAuth
+
+def fetch_essential_def_sync(essential_name: str) -> dict:
+    """Sync fallback using requests + NTLM."""
+    auth = RequestsNtlmAuth(os.getenv("LENZ_USERNAME"), os.getenv("LENZ_PASSWORD"))
+    response = requests.get(
+        f"{os.getenv('LENZ_API_BASE_URL')}/def",
+        params={"name": essential_name},
+        auth=auth,
+        timeout=30,
+        verify=True
+    )
+    response.raise_for_status()
+    return response.json()
+```
+
+**Note:** Lenz calls are infrequent (cached with 5-min TTL), so using sync fallback has negligible performance impact. If async NTLM fails during testing, switch to sync — do NOT block on this.
 
 ## AWS CloudWatch Connection (FUTURE — Phase 4)
 
@@ -299,8 +338,10 @@ AZURE_OPENAI_API_VERSION=2024-02-01
 AZURE_OPENAI_DEPLOYMENT=
 AZURE_USER_ID=
 
-# Lenz API
+# Lenz API (NTLM auth via ADFS)
 LENZ_API_BASE_URL=https://lenz-app.prod.aws.jpmchase.net/lenz/essentials
+LENZ_USERNAME=
+LENZ_PASSWORD=
 
 # App
 LOG_LEVEL=INFO

@@ -5,7 +5,7 @@ Manages SQLAlchemy connection pools for both RDS MySQL databases:
 - FINEGRAINED_WORKFLOW (batch/workflow status)
 - airflow (DAG and task metadata)
 
-RDS_PASSWORD is an IAM auth token that expires in ~15 minutes.
+RDS_PASSWORD is an IAM auth token that lasts 6+ hours.
 URL.create() passes it as a discrete component — no URL parsing issues.
 SSL/TLS is ALWAYS enabled — IAM token auth requires an encrypted connection.
 """
@@ -74,7 +74,7 @@ def create_rds_engine(database: str) -> Engine:
         pool_size=5,
         max_overflow=10,
         pool_timeout=30,
-        pool_recycle=600,       # IAM token expires in ~15 min; recycle well before
+        pool_recycle=18000,     # IAM token lasts 6+ hrs; recycle at 5 hrs
         pool_pre_ping=True,     # Verify connection is alive before checkout
         echo=False,
     )

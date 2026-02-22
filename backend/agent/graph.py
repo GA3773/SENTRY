@@ -2,13 +2,16 @@
 
 Defines the full agent workflow with conditional routing based on intent:
 
-  START → intent_classifier
+  START → context_loader → intent_classifier
     → status_check    → batch_resolver → data_fetcher → analyzer → response_synthesizer → END
     → rca_drilldown   → batch_resolver → data_fetcher → analyzer → response_synthesizer → END
     → task_detail     → data_fetcher → response_synthesizer → END
     → general_query   → batch_resolver → response_synthesizer → END (Tier 2 future)
     → prediction      → response_synthesizer → END
     → out_of_scope    → response_synthesizer → END
+
+context_loader clears stale per-turn fields (error, response_text, analysis, etc.)
+while MemorySaver preserves conversation context (batch_name, dataset_ids, etc.).
 
 Error short-circuit: if any node sets state["error"], routing skips to response_synthesizer.
 """
@@ -20,6 +23,7 @@ from langgraph.graph import END, StateGraph
 
 from agent.nodes.analyzer import analyzer
 from agent.nodes.batch_resolver import batch_resolver
+from agent.nodes.context_loader import context_loader
 from agent.nodes.data_fetcher import data_fetcher
 from agent.nodes.intent_classifier import intent_classifier
 from agent.nodes.response_synthesizer import response_synthesizer
@@ -85,14 +89,18 @@ def build_graph() -> StateGraph:
     workflow = StateGraph(SentryState)
 
     # Register nodes
+    workflow.add_node("context_loader", context_loader)
     workflow.add_node("intent_classifier", intent_classifier)
     workflow.add_node("batch_resolver", batch_resolver)
     workflow.add_node("data_fetcher", data_fetcher)
     workflow.add_node("analyzer", analyzer)
     workflow.add_node("response_synthesizer", response_synthesizer)
 
-    # Entry point
-    workflow.set_entry_point("intent_classifier")
+    # Entry point — context_loader runs first to clear stale per-turn fields
+    workflow.set_entry_point("context_loader")
+
+    # context_loader always flows to intent_classifier
+    workflow.add_edge("context_loader", "intent_classifier")
 
     # Conditional edges
     workflow.add_conditional_edges(

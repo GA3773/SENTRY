@@ -4,10 +4,10 @@ Lenz API service for SENTRY.
 Provides batch (Essential) definitions: which datasets belong to a batch,
 their execution sequence, and valid slices per dataset.
 
-The Lenz API is behind ADFS (Windows Integrated Auth / NTLM).
-Primary: async httpx + httpx-ntlm.
-Fallback: sync requests + requests-ntlm (some ADFS configs reject async NTLM).
-Calls are cached with 5-min TTL so sync fallback has negligible performance impact.
+The Lenz API is behind ADFS (Windows Integrated Auth / Kerberos).
+Uses requests-negotiate-sspi for Windows SSPI auth — leverages the current
+domain login session automatically (no username/password needed).
+Calls are cached with 5-min TTL so sync requests have negligible impact.
 """
 
 import logging
@@ -15,8 +15,9 @@ import os
 import time
 from typing import Optional
 
-import httpx
+import requests
 from dotenv import load_dotenv
+from requests_negotiate_sspi import HttpNegotiateAuth
 
 from config.essentials_map import ESSENTIAL_MAP
 from models.lenz import DatasetDef, EssentialDef
@@ -141,43 +142,33 @@ class LenzService:
     # ------------------------------------------------------------------
 
     async def _fetch_raw(self, essential_name: str) -> dict:
-        """Fetch raw JSON from Lenz API with NTLM auth.
+        """Fetch raw JSON from Lenz API with Windows SSPI Kerberos auth.
 
-        Tries async httpx + httpx-ntlm first. Falls back to sync
-        requests + requests-ntlm if async NTLM is rejected by ADFS.
+        Uses requests-negotiate-sspi which leverages the current Windows
+        domain login session — no credentials needed in .env.
+        Sync call, but Lenz responses are cached so impact is negligible.
         """
         url = f"{self._base_url}/def"
         params = {"name": essential_name}
-        username = os.getenv("LENZ_USERNAME")
-        password = os.getenv("LENZ_PASSWORD")
 
-        if not username or not password:
-            raise ValueError("LENZ_USERNAME and LENZ_PASSWORD must be set in .env")
-
-        # Primary: async httpx + httpx-ntlm
-        try:
-            from httpx_ntlm import HttpNtlmAuth
-
-            auth = HttpNtlmAuth(username, password)
-            async with httpx.AsyncClient(
-                auth=auth, timeout=30, follow_redirects=True
-            ) as client:
-                response = await client.get(url, params=params)
-                response.raise_for_status()
-                return response.json()
-        except ImportError:
-            log.warning("httpx-ntlm not installed, falling back to requests-ntlm")
-        except Exception as e:
-            log.warning("Async NTLM failed (%s), falling back to requests-ntlm", e)
-
-        # Fallback: sync requests + requests-ntlm
-        import requests
-        from requests_ntlm import HttpNtlmAuth as RequestsNtlmAuth
-
-        auth = RequestsNtlmAuth(username, password)
+        auth = HttpNegotiateAuth()
         response = requests.get(
             url, params=params, auth=auth, timeout=30, verify=True
         )
+
+        content_type = response.headers.get("content-type", "")
+        if "json" not in content_type:
+            log.error(
+                "Lenz API returned non-JSON (status=%s, content-type=%s): %s",
+                response.status_code,
+                content_type,
+                response.text[:200],
+            )
+            raise ValueError(
+                f"Lenz API returned {content_type} instead of JSON "
+                f"(status {response.status_code}). Check Kerberos/SSPI auth."
+            )
+
         response.raise_for_status()
         return response.json()
 

@@ -7,13 +7,16 @@ from datetime import date
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from agent.state import SentryState
+from config.domain_rules import DOMAIN_GLOSSARY
 from services.azure_openai import create_llm
 
 log = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """\
+SYSTEM_PROMPT = f"""\
 You are the intent classifier for SENTRY, an SRE batch monitoring platform \
 that tracks batch processing workflows ("Essentials" / "Asset Classes").
+
+{DOMAIN_GLOSSARY}
 
 Given the user's message (and any prior conversation context), classify it \
 into EXACTLY ONE intent and extract relevant entities.
@@ -45,7 +48,7 @@ Extract these entities if present in the message (or carried from prior context)
 - **batch_name**: The batch / essential / asset class mentioned (e.g. "derivatives", \
 "6G", "SNU", "collateral"). Use the raw user term, not the Lenz name.
 - **business_date**: A date reference like "today", "yesterday", "2026-02-21". \
-Convert relative dates using today = {today}.
+Convert relative dates using today = {{today}}.
 - **processing_type**: "PRELIM" or "FINAL" if explicitly mentioned, else null.
 - **slice_ref**: A slice reference if mentioned (e.g. "EMEA", "NA", "APAC").
 

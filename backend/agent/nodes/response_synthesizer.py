@@ -7,12 +7,15 @@ from datetime import date
 from langchain_core.messages import AIMessage, SystemMessage
 
 from agent.state import SentryState
+from config.domain_rules import DOMAIN_GLOSSARY
 from services.azure_openai import create_llm
 
 log = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """\
+SYSTEM_PROMPT = f"""\
 You are SENTRY, an intelligent SRE assistant for batch monitoring at JPMorgan Chase.
+
+{DOMAIN_GLOSSARY}
 
 Generate a concise, informative response about batch processing status. \
 Be direct and factual — SRE teams need actionable information, not filler.
@@ -146,6 +149,23 @@ def _build_context(state: SentryState) -> str:
     pt = state.get("processing_type")
     if pt:
         parts.append(f"Processing Type: {pt}")
+
+    # Batch definition from Lenz (dataset IDs, sequence orders, slice names)
+    batch_def = state.get("batch_definition")
+    if batch_def:
+        datasets = batch_def.get("datasets", [])
+        ess_name = batch_def.get("essential_name", "unknown")
+        lines = [f"\nBATCH DEFINITION (from Lenz API):", f"Essential: {ess_name}", f"Datasets ({len(datasets)}):"]
+        for ds in datasets:
+            ds_id = ds.get("dataset_id", "?")
+            seq = ds.get("sequence_order", "?")
+            sg = ds.get("slice_groups")
+            if sg:
+                all_slices = [s for group in sg.values() for s in group]
+                lines.append(f"  Seq {seq}: {ds_id} (slices: {', '.join(all_slices)})")
+            else:
+                lines.append(f"  Seq {seq}: {ds_id} (no slices)")
+        parts.append("\n".join(lines))
 
     analysis = state.get("analysis")
     if analysis:

@@ -104,4 +104,6 @@ ESSENTIAL_MAP = {
 - Some datasets have `sliceGroups` with named groups (e.g., "DERIV": [...]), others have flat `"slices": [...]`
 - WORKFLOW_RUN_INSTANCE has no explicit `start_time`/`end_time` — derive from CREATED_DATE and UPDATED_DATE
 - The airflow database `task_instance` table uses `run_id` (not `dag_run_id`) as the column name
+- **LenzService methods are synchronous** (not async). They use `requests` internally. Call them directly from graph nodes — no await, no asyncio wrappers.
+- **MemorySaver carries forward ALL state fields between turns** for the same thread_id. The `context_loader` node clears stale response fields (error, response_text, analysis, etc.) at the start of each turn. Batch context (batch_name, dataset_ids, batch_definition) persists automatically. Do NOT set these to None in the API layer's input_state — only set fields the caller explicitly provides.
 - Read @docs/data-model.md for full schema details before writing ANY database queries

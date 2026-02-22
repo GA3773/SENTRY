@@ -14,6 +14,19 @@ import sys
 # Ensure backend/ is on the path so 'services' is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+# --- TEMPORARY DEBUG: verify .env is loaded correctly ---
+from dotenv import load_dotenv
+load_dotenv()
+
+password = os.getenv("RDS_PASSWORD", "")
+print(f"RDS_HOST = {os.getenv('RDS_HOST')}")
+print(f"RDS_USER = {os.getenv('RDS_USER')}")
+print(f"RDS_PASSWORD length = {len(password)}")
+print(f"RDS_PASSWORD first 20 chars = {password[:20]!r}")
+print(f"RDS_PASSWORD last 10 chars = {password[-10:]!r}")
+print()
+# --- END TEMPORARY DEBUG ---
+
 from sqlalchemy import text
 
 from services.db_service import get_airflow_engine, get_fgw_engine

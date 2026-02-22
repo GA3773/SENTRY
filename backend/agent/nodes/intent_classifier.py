@@ -100,20 +100,24 @@ def intent_classifier(state: SentryState) -> dict:
         "tool_calls_log": state.get("tool_calls_log") or [],
     }
 
-    # Populate batch_name only if classifier found one AND state doesn't already have one
+    # Batch name: LLM-extracted wins, else keep carried-forward, else None
     extracted_batch = parsed.get("batch_name")
     if extracted_batch:
         updates["batch_name"] = extracted_batch
     elif not state.get("batch_name"):
         updates["batch_name"] = None
 
-    # Business date: prefer API-provided (already in state), then classifier, then today
-    if not state.get("business_date"):
-        updates["business_date"] = parsed.get("business_date") or today
+    # Business date priority: LLM-extracted > existing state > today
+    extracted_date = parsed.get("business_date")
+    if extracted_date:
+        updates["business_date"] = extracted_date
+    elif not state.get("business_date"):
+        updates["business_date"] = today
 
-    # Processing type: prefer API-provided, then classifier
-    if not state.get("processing_type") and parsed.get("processing_type"):
-        updates["processing_type"] = parsed["processing_type"]
+    # Processing type priority: LLM-extracted > existing state > None
+    extracted_pt = parsed.get("processing_type")
+    if extracted_pt:
+        updates["processing_type"] = extracted_pt
 
     # prediction → set a placeholder response and short-circuit
     if intent == "prediction":

@@ -3,7 +3,11 @@ Lenz API service for SENTRY.
 
 Provides batch (Essential) definitions: which datasets belong to a batch,
 their execution sequence, and valid slices per dataset.
-Uses async httpx for API calls and in-memory caching with configurable TTL.
+
+The Lenz API is behind ADFS (Windows Integrated Auth / NTLM).
+Primary: async httpx + httpx-ntlm.
+Fallback: sync requests + requests-ntlm (some ADFS configs reject async NTLM).
+Calls are cached with 5-min TTL so sync fallback has negligible performance impact.
 """
 
 import logging
@@ -137,14 +141,45 @@ class LenzService:
     # ------------------------------------------------------------------
 
     async def _fetch_raw(self, essential_name: str) -> dict:
-        """Fetch raw JSON from Lenz API."""
-        async with httpx.AsyncClient(timeout=10) as client:
-            response = await client.get(
-                f"{self._base_url}/def",
-                params={"name": essential_name},
-            )
-            response.raise_for_status()
-            return response.json()
+        """Fetch raw JSON from Lenz API with NTLM auth.
+
+        Tries async httpx + httpx-ntlm first. Falls back to sync
+        requests + requests-ntlm if async NTLM is rejected by ADFS.
+        """
+        url = f"{self._base_url}/def"
+        params = {"name": essential_name}
+        username = os.getenv("LENZ_USERNAME")
+        password = os.getenv("LENZ_PASSWORD")
+
+        if not username or not password:
+            raise ValueError("LENZ_USERNAME and LENZ_PASSWORD must be set in .env")
+
+        # Primary: async httpx + httpx-ntlm
+        try:
+            from httpx_ntlm import HttpNtlmAuth
+
+            auth = HttpNtlmAuth(username, password)
+            async with httpx.AsyncClient(
+                auth=auth, timeout=30, follow_redirects=True
+            ) as client:
+                response = await client.get(url, params=params)
+                response.raise_for_status()
+                return response.json()
+        except ImportError:
+            log.warning("httpx-ntlm not installed, falling back to requests-ntlm")
+        except Exception as e:
+            log.warning("Async NTLM failed (%s), falling back to requests-ntlm", e)
+
+        # Fallback: sync requests + requests-ntlm
+        import requests
+        from requests_ntlm import HttpNtlmAuth as RequestsNtlmAuth
+
+        auth = RequestsNtlmAuth(username, password)
+        response = requests.get(
+            url, params=params, auth=auth, timeout=30, verify=True
+        )
+        response.raise_for_status()
+        return response.json()
 
     async def get_essential_definition(self, name: str) -> EssentialDef:
         """Resolve user input to an essential name and fetch its definition.

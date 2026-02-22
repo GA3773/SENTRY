@@ -4,9 +4,15 @@ Quick connectivity test for both RDS MySQL databases.
 Usage:
     cd backend
     python -m tests.test_db_connectivity
+    # or
+    python tests/test_db_connectivity.py
 """
 
+import os
 import sys
+
+# Ensure backend/ is on the path so 'services' is importable
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from sqlalchemy import text
 

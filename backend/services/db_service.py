@@ -7,11 +7,12 @@ Manages SQLAlchemy connection pools for both RDS MySQL databases:
 
 RDS_PASSWORD is an IAM auth token that expires in ~15 minutes.
 URL.create() passes it as a discrete component — no URL parsing issues.
-SSL is optional: only enabled if RDS_PEM_PATH is set and the file exists.
+SSL/TLS is ALWAYS enabled — IAM token auth requires an encrypted connection.
 """
 
 import logging
 import os
+import ssl
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -51,18 +52,20 @@ def create_rds_engine(database: str) -> Engine:
         database=database,
     )
 
-    # SSL is optional — only add ssl context if RDS_PEM_PATH is set
-    # and the file exists. The NLB endpoint may not require a cert.
-    connect_args: dict = {}
+    # SSL/TLS is ALWAYS required — IAM token auth is rejected without it.
+    # If a PEM CA cert is available, use it for full verification.
+    # Otherwise, still enable TLS but skip certificate verification.
     pem_path = os.getenv("RDS_PEM_PATH")
     if pem_path and os.path.exists(pem_path):
-        import ssl
-
         ssl_context = ssl.create_default_context(cafile=pem_path)
-        connect_args["ssl"] = ssl_context
-        log.info("SSL enabled using PEM: %s", pem_path)
+        log.info("SSL enabled with CA cert: %s", pem_path)
     else:
-        log.info("SSL disabled — RDS_PEM_PATH not set or file not found")
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        log.info("SSL enabled without cert verification (no PEM file)")
+
+    connect_args = {"ssl": ssl_context}
 
     engine = create_engine(
         url,

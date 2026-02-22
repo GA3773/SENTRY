@@ -1,0 +1,53 @@
+<div class="chat-panel">
+
+  <div class="chat-header">
+    <div class="chat-header-left">
+      <div class="chat-logo">S</div>
+      <div>
+        <div class="chat-title">SENTRY AI</div>
+        <div class="chat-status">
+          <span class="connection-dot" style="width:5px;height:5px;"></span>
+          Connected &middot; GPT-4o
+        </div>
+      </div>
+    </div>
+    <div class="chat-actions">
+      <button class="chat-action-btn" id="newChatBtn" title="New conversation">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="chat-action-btn" title="History">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </button>
+      <button class="chat-action-btn" title="Expand">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Context Bar -->
+  <div class="chat-context" id="chatContext">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+    Context:
+    <span class="context-tag" id="contextDate">-- <span class="remove">&times;</span></span>
+    <span class="context-tag">PROD <span class="remove">&times;</span></span>
+  </div>
+
+  <!-- Messages -->
+  <div class="chat-messages" id="chatMessages">
+    <!-- Populated dynamically by chat.js -->
+  </div>
+
+  <!-- Input -->
+  <div class="chat-input-area">
+    <div class="chat-input-wrapper">
+      <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask about batch status, RCA, metrics..."></textarea>
+      <button class="chat-send-btn" id="chatSendBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+    <div class="chat-input-hint">
+      <kbd>Enter</kbd> to send &middot; <kbd>Shift+Enter</kbd> for new line &middot; Tools: Lenz, RDS, Airflow, CloudWatch
+    </div>
+  </div>
+
+</div>

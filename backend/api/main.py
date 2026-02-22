@@ -6,10 +6,13 @@ import logging
 import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
@@ -26,11 +29,26 @@ app = FastAPI(title="SENTRY", description="SRE Intelligent Batch Monitoring Plat
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=["http://localhost:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------------------------------------------------------------------
+# Frontend: Jinja2 templates + static files served by FastAPI
+# ---------------------------------------------------------------------------
+
+_frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
+
+app.mount("/static", StaticFiles(directory=str(_frontend_dir / "static")), name="static")
+templates = Jinja2Templates(directory=str(_frontend_dir / "templates"))
+
+
+@app.get("/")
+async def dashboard(request: Request):
+    """Serve the main dashboard page via Jinja2 template."""
+    return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
 # ---------------------------------------------------------------------------

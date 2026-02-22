@@ -6,8 +6,8 @@ Defines the full agent workflow with conditional routing based on intent:
     → status_check    → batch_resolver → data_fetcher → analyzer → response_synthesizer → END
     → rca_drilldown   → batch_resolver → data_fetcher → analyzer → response_synthesizer → END
     → task_detail     → data_fetcher → response_synthesizer → END
-    → general_query   → batch_resolver → response_synthesizer → END (Tier 2 future)
-    → prediction      → response_synthesizer → END
+    → general_query   → response_synthesizer → END (placeholder until Tier 2)
+    → prediction      → response_synthesizer → END (placeholder until Phase 3)
     → out_of_scope    → response_synthesizer → END
 
 context_loader clears stale per-turn fields (error, response_text, analysis, etc.)
@@ -43,12 +43,13 @@ def route_after_intent(state: SentryState) -> str:
 
     intent = state.get("intent", "out_of_scope")
 
-    if intent in ("status_check", "rca_drilldown", "general_query"):
+    if intent in ("status_check", "rca_drilldown"):
         return "batch_resolver"
     elif intent == "task_detail":
         return "data_fetcher"
+    elif intent in ("prediction", "general_query", "out_of_scope"):
+        return "response_synthesizer"
     else:
-        # prediction, out_of_scope, or unknown
         return "response_synthesizer"
 
 
@@ -56,14 +57,8 @@ def route_after_resolver(state: SentryState) -> str:
     """Route from batch_resolver based on intent (and error state)."""
     if state.get("error"):
         return "response_synthesizer"
-
-    intent = state.get("intent", "general_query")
-
-    if intent in ("status_check", "rca_drilldown"):
-        return "data_fetcher"
-    else:
-        # general_query → straight to response (Tier 2 SQL not yet implemented)
-        return "response_synthesizer"
+    # Only status_check and rca_drilldown reach batch_resolver now
+    return "data_fetcher"
 
 
 def route_after_fetcher(state: SentryState) -> str:

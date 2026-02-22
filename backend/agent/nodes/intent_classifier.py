@@ -126,4 +126,17 @@ def intent_classifier(state: SentryState) -> dict:
             "What is the current status instead?",
         ]
 
+    # general_query → placeholder until Tier 2 SQL analyst is implemented
+    if intent == "general_query":
+        updates["response_text"] = (
+            "Ad-hoc analytical queries are coming in a future release. "
+            "For now, I can check current batch status, investigate failures, "
+            "or show task-level details for specific DAG runs."
+        )
+        updates["suggested_queries"] = [
+            "What is the current status of this batch?",
+            "What failed today?",
+            "Show me historical runs for the last 5 days",
+        ]
+
     return updates

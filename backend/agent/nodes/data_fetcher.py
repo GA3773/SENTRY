@@ -5,7 +5,7 @@ import time
 from datetime import date
 
 from agent.state import SentryState
-from agent.tools.batch_tools import get_batch_progress, get_batch_status
+from agent.tools.batch_tools import get_batch_progress, get_batch_status, get_slice_status
 from agent.tools.task_tools import get_task_details
 
 log = logging.getLogger(__name__)
@@ -30,7 +30,9 @@ def data_fetcher(state: SentryState) -> dict:
 
     if intent == "status_check":
         query_results, rca_findings = _fetch_status(
-            dataset_ids, batch_def, business_date, processing_type, tool_calls_log
+            dataset_ids, batch_def, business_date, processing_type, tool_calls_log,
+            target_dataset=state.get("target_dataset"),
+            resolved_slices=state.get("resolved_slices"),
         )
 
     elif intent == "rca_drilldown":
@@ -54,8 +56,10 @@ def _fetch_status(
     business_date: str,
     processing_type: str | None,
     tool_calls_log: list,
+    target_dataset: dict | None = None,
+    resolved_slices: list[str] | None = None,
 ) -> tuple[dict, dict]:
-    """Fetch batch status + sequence progress."""
+    """Fetch batch status + sequence progress + optional slice-level status."""
     query_results: dict = {}
     rca_findings: dict = {}
 
@@ -123,6 +127,29 @@ def _fetch_status(
                 finding["failed_tasks"] = tasks.get("tasks", [])
 
             rca_findings["failed_datasets"].append(finding)
+
+    # 4. Slice-level status — if user asked about a specific dataset's slices
+    if target_dataset:
+        ds_id = target_dataset["dataset_id"]
+        slice_patterns = resolved_slices or target_dataset.get("all_slices", [])
+
+        if slice_patterns:
+            t0 = time.time()
+            slice_result = get_slice_status(
+                dataset_id=ds_id,
+                business_date=business_date,
+                slice_patterns=slice_patterns,
+                processing_type=processing_type,
+            )
+            tool_calls_log.append({
+                "tool": "get_slice_status",
+                "input": {
+                    "dataset_id": ds_id,
+                    "slice_patterns": slice_patterns,
+                },
+                "duration_ms": int((time.time() - t0) * 1000),
+            })
+            query_results["slice_status"] = slice_result
 
     return query_results, rca_findings
 

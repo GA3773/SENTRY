@@ -4,7 +4,7 @@ import logging
 import time
 
 from agent.state import SentryState
-from services.lenz_service import LenzService
+from services.lenz_service import LenzService, resolve_slice_filter
 
 log = logging.getLogger(__name__)
 
@@ -51,9 +51,54 @@ def batch_resolver(state: SentryState) -> dict:
         len(dataset_ids),
     )
 
-    return {
+    result: dict = {
         "batch_name": definition.display_name,
         "batch_definition": definition_dict,
         "dataset_ids": dataset_ids,
         "tool_calls_log": tool_calls_log,
     }
+
+    # ---- Dataset-level targeting ----
+    dataset_ref = state.get("dataset_ref")
+    if dataset_ref:
+        matched_ds = _resolve_dataset_ref(definition.datasets, dataset_ref)
+        if matched_ds:
+            log.info("Resolved dataset_ref '%s' → %s", dataset_ref, matched_ds.dataset_id)
+            result["target_dataset"] = {
+                "dataset_id": matched_ds.dataset_id,
+                "sequence_order": matched_ds.sequence_order,
+                "slice_groups": matched_ds.slice_groups,
+                "all_slices": matched_ds.all_slices,
+            }
+
+            # ---- Slice-level targeting ----
+            slice_ref = state.get("slice_ref")
+            if slice_ref:
+                matched_slices = resolve_slice_filter(definition, matched_ds.dataset_id, slice_ref)
+                result["resolved_slices"] = matched_slices
+                log.info("Resolved slice_ref '%s' → %s", slice_ref, matched_slices)
+            else:
+                result["resolved_slices"] = matched_ds.all_slices
+        else:
+            log.warning("dataset_ref '%s' did not match any dataset in %s", dataset_ref, definition.essential_name)
+
+    return result
+
+
+def _resolve_dataset_ref(datasets, ref: str):
+    """Match a user's dataset reference to a DatasetDef.
+
+    Tries exact match first, then case-insensitive substring match.
+    """
+    # Exact match
+    for ds in datasets:
+        if ds.dataset_id == ref:
+            return ds
+
+    # Substring match (case-insensitive)
+    ref_lower = ref.lower()
+    for ds in datasets:
+        if ref_lower in ds.dataset_id.lower():
+            return ds
+
+    return None

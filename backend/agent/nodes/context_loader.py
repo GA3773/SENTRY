@@ -52,4 +52,10 @@ def context_loader(state: SentryState) -> dict:
     updates["query_results"] = None
     updates["rca_findings"] = None
 
+    # Clear per-turn targeting fields (dataset/slice)
+    updates["dataset_ref"] = None
+    updates["target_dataset"] = None
+    updates["slice_ref"] = None
+    updates["resolved_slices"] = None
+
     return updates

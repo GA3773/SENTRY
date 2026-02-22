@@ -47,6 +47,10 @@ Extract these entities if present in the message (or carried from prior context)
 
 - **batch_name**: The batch / essential / asset class mentioned (e.g. "derivatives", \
 "6G", "SNU", "collateral"). Use the raw user term, not the Lenz name.
+- **dataset_ref**: A specific dataset ID or partial dataset name if the user mentions one \
+(e.g. "com.jpmc.ct.lri.derivatives-calc_intercompany_fx_adjustment_e15", "intercompany", \
+"slsline_calculator"). Use the raw user term. Null if the user is asking about the whole \
+batch/essential and not a specific dataset within it.
 - **business_date**: A date reference like "today", "yesterday", "2026-02-21". \
 Convert relative dates using today = {{today}}.
 - **processing_type**: "PRELIM" or "FINAL" if explicitly mentioned, else null.
@@ -58,6 +62,7 @@ Return ONLY valid JSON — no markdown, no explanation:
 {{
   "intent": "<one of the intents above>",
   "batch_name": "<string or null>",
+  "dataset_ref": "<string or null>",
   "business_date": "<YYYY-MM-DD or null>",
   "processing_type": "<PRELIM|FINAL or null>",
   "slice_ref": "<string or null>"
@@ -121,6 +126,16 @@ def intent_classifier(state: SentryState) -> dict:
     extracted_pt = parsed.get("processing_type")
     if extracted_pt:
         updates["processing_type"] = extracted_pt
+
+    # Dataset reference (specific dataset within a batch)
+    extracted_dataset = parsed.get("dataset_ref")
+    if extracted_dataset:
+        updates["dataset_ref"] = extracted_dataset
+
+    # Slice reference (e.g. "EMEA", "GLOBAL")
+    extracted_slice = parsed.get("slice_ref")
+    if extracted_slice:
+        updates["slice_ref"] = extracted_slice
 
     # prediction → set a placeholder response and short-circuit
     if intent == "prediction":

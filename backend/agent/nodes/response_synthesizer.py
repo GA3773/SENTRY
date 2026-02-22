@@ -155,14 +155,16 @@ def _build_context(state: SentryState) -> str:
     if batch_def:
         datasets = batch_def.get("datasets", [])
         ess_name = batch_def.get("essential_name", "unknown")
-        lines = [f"\nBATCH DEFINITION (from Lenz API):", f"Essential: {ess_name}", f"Datasets ({len(datasets)}):"]
+        lines = ["\nBATCH DEFINITION (from Lenz API):", f"Essential: {ess_name}", f"Datasets ({len(datasets)}):"]
         for ds in datasets:
             ds_id = ds.get("dataset_id", "?")
             seq = ds.get("sequence_order", "?")
             sg = ds.get("slice_groups")
             if sg:
                 all_slices = [s for group in sg.values() for s in group]
-                lines.append(f"  Seq {seq}: {ds_id} (slices: {', '.join(all_slices)})")
+                display = ", ".join(all_slices[:5])
+                suffix = "..." if len(all_slices) > 5 else ""
+                lines.append(f"  Seq {seq}: {ds_id} (slices: {display}{suffix})")
             else:
                 lines.append(f"  Seq {seq}: {ds_id} (no slices)")
         parts.append("\n".join(lines))
@@ -170,6 +172,16 @@ def _build_context(state: SentryState) -> str:
     analysis = state.get("analysis")
     if analysis:
         parts.append(f"\nAnalysis:\n{json.dumps(analysis, indent=2, default=str)}")
+
+        # Slice-level details in human-readable form
+        slice_analysis = analysis.get("slice_analysis")
+        if slice_analysis:
+            parts.append(f"\nSlice Analysis for dataset: {slice_analysis.get('dataset_id')}")
+            parts.append(f"Slice Summary: {json.dumps(slice_analysis.get('summary', {}), default=str)}")
+            parts.append("Per-slice details:")
+            for s in slice_analysis.get("slices", []):
+                dur = f", {s['duration_minutes']}min" if s.get("duration_minutes") else ""
+                parts.append(f"  {s['name']}: {s['status']}{dur}")
 
     query_results = state.get("query_results")
     if query_results:
@@ -204,6 +216,8 @@ def _build_structured_data(state: SentryState) -> dict | None:
             data["sequence_progress"] = analysis["sequence_progress"]
         if analysis.get("failures"):
             data["failures"] = analysis["failures"]
+        if analysis.get("slice_analysis"):
+            data["slice_analysis"] = analysis["slice_analysis"]
         return data
 
     if intent == "task_detail":

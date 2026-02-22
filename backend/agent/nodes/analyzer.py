@@ -125,6 +125,39 @@ def analyzer(state: SentryState) -> dict:
     if anomalies:
         analysis["anomalies"] = anomalies
 
+    # ---- Slice-level analysis ----
+    slice_status = query_results.get("slice_status")
+    if slice_status and slice_status.get("slices"):
+        target_ds = state.get("target_dataset") or {}
+        slice_analysis: dict = {
+            "dataset_id": target_ds.get("dataset_id") if target_ds else None,
+            "slices": [],
+            "summary": {"total": 0, "success": 0, "failed": 0, "running": 0, "not_started": 0},
+        }
+        for pattern, info in slice_status["slices"].items():
+            status = info.get("status", "NOT_STARTED")
+            slice_analysis["slices"].append({
+                "name": pattern,
+                "status": status,
+                "dag_run_id": info.get("dag_run_id"),
+                "created_date": info.get("created_date"),
+                "updated_date": info.get("updated_date"),
+                "total_runs": info.get("total_runs", 0),
+                "duration_minutes": _duration_minutes(
+                    info.get("created_date"), info.get("updated_date")
+                ),
+            })
+            slice_analysis["summary"]["total"] += 1
+            if status == "SUCCESS":
+                slice_analysis["summary"]["success"] += 1
+            elif status in ("FAILED", "CANCELLED"):
+                slice_analysis["summary"]["failed"] += 1
+            elif status in ("RUNNING", "QUEUED"):
+                slice_analysis["summary"]["running"] += 1
+            else:
+                slice_analysis["summary"]["not_started"] += 1
+        analysis["slice_analysis"] = slice_analysis
+
     return {"analysis": analysis}
 
 

@@ -23,6 +23,14 @@ class SentryState(TypedDict):
     batch_definition: Optional[dict]
     dataset_ids: Optional[List[str]]
 
+    # Dataset-level targeting (when user asks about a specific dataset within a batch)
+    dataset_ref: Optional[str]
+    target_dataset: Optional[dict]
+
+    # Slice-level targeting
+    slice_ref: Optional[str]
+    resolved_slices: Optional[List[str]]
+
     # Query context
     business_date: Optional[str]
     processing_type: Optional[str]

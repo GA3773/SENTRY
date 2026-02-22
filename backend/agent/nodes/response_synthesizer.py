@@ -29,6 +29,15 @@ Be direct and factual — SRE teams need actionable information, not filler.
 - Duration in minutes unless > 120 min, then use hours
 - If there are failures AND you have task-level details, mention the specific failed tasks
 - Keep it under 200 words unless the user asked for details
+- If "Slice Analysis" is present in the context, the user asked about a specific dataset's \
+slices. Focus your response on slice-level details (per-slice status, durations, failures), \
+NOT the overall batch summary. Only briefly mention the batch context for orientation \
+(e.g. "Within TB-Derivatives, dataset intercompany_fx_adjustment has 6 slices:").
+- If "Target Dataset" is present in the context, the user asked about a specific dataset \
+within the batch. Focus on that dataset's status, not the full batch. Mention the dataset \
+name, its sequence order, and its specific status.
+- When reporting slice details, list each slice with its status and duration. Group by \
+status if there are many slices (e.g. "4 EMEA slices succeeded, 2 GLOBAL slices running").
 
 ## Response Structure
 Return ONLY valid JSON:
@@ -85,12 +94,26 @@ def response_synthesizer(state: SentryState) -> dict:
     # Normal flow: use LLM to synthesize response from analysis
     context = _build_context(state)
 
+    # Get the user's latest message for context
+    user_messages = state.get("messages", [])
+    latest_user_msg = None
+    for msg in reversed(user_messages):
+        if hasattr(msg, "type") and msg.type == "human":
+            latest_user_msg = msg
+            break
+        elif hasattr(msg, "content") and not hasattr(msg, "type"):
+            latest_user_msg = msg
+            break
+
     try:
         llm = create_llm()
-        llm_response = llm.invoke([
+        llm_input = [
             SystemMessage(content=SYSTEM_PROMPT),
             SystemMessage(content=f"Context:\n{context}"),
-        ])
+        ]
+        if latest_user_msg:
+            llm_input.append(latest_user_msg)
+        llm_response = llm.invoke(llm_input)
         raw = llm_response.content.strip()
 
         # Strip markdown fences
@@ -149,6 +172,21 @@ def _build_context(state: SentryState) -> str:
     pt = state.get("processing_type")
     if pt:
         parts.append(f"Processing Type: {pt}")
+
+    dataset_ref = state.get("dataset_ref")
+    if dataset_ref:
+        parts.append(f"Target Dataset: {dataset_ref}")
+
+    slice_ref = state.get("slice_ref")
+    if slice_ref:
+        parts.append(f"Slice Filter: {slice_ref}")
+
+    target_ds = state.get("target_dataset")
+    if target_ds:
+        parts.append(f"Resolved Target: {target_ds.get('dataset_id')} (seq {target_ds.get('sequence_order')})")
+        all_slices = target_ds.get("all_slices", [])
+        if all_slices:
+            parts.append(f"Available Slices ({len(all_slices)}): {', '.join(all_slices)}")
 
     # Batch definition from Lenz (dataset IDs, sequence orders, slice names)
     batch_def = state.get("batch_definition")

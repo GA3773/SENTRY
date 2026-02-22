@@ -6,13 +6,12 @@ Manages SQLAlchemy connection pools for both RDS MySQL databases:
 - airflow (DAG and task metadata)
 
 RDS_PASSWORD is an IAM auth token that expires in ~15 minutes.
-It must be URL-encoded in the connection string, and pool_recycle
-must be set well below the expiry window.
+URL.create() passes it as a discrete component — no URL parsing issues.
+SSL is optional: only enabled if RDS_PEM_PATH is set and the file exists.
 """
 
 import logging
 import os
-import ssl
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
@@ -24,18 +23,8 @@ load_dotenv()
 log = logging.getLogger(__name__)
 
 
-def _build_ssl_context() -> ssl.SSLContext:
-    """Build an SSL context using the RDS PEM certificate."""
-    pem_path = os.getenv("RDS_PEM_PATH")
-    if not pem_path:
-        raise ValueError("RDS_PEM_PATH environment variable is not set")
-    if not os.path.exists(pem_path):
-        raise FileNotFoundError(f"RDS PEM file not found: {pem_path}")
-    return ssl.create_default_context(cafile=pem_path)
-
-
 def create_rds_engine(database: str) -> Engine:
-    """Create a READ-ONLY SQLAlchemy connection pool to RDS MySQL.
+    """Create a READ-ONLY SQLAlchemy connection pool to RDS MySQL via NLB.
 
     Args:
         database: The database name (e.g. 'FINEGRAINED_WORKFLOW' or 'airflow').
@@ -44,18 +33,15 @@ def create_rds_engine(database: str) -> Engine:
         A configured SQLAlchemy Engine.
     """
     host = os.getenv("RDS_HOST")
-    port = os.getenv("RDS_PORT", "3306")
+    port = os.getenv("RDS_PORT", "6150")
     user = os.getenv("RDS_USER")
     password = os.getenv("RDS_PASSWORD")
 
     if not all([host, user, password]):
         raise ValueError("RDS_HOST, RDS_USER, and RDS_PASSWORD must be set in .env")
 
-    ssl_context = _build_ssl_context()
-
-    # Use URL.create() so the IAM token (which contains :, /, ?, &)
-    # is passed as a discrete component — never embedded in a string
-    # that SQLAlchemy's URL parser would try to split on delimiters.
+    # URL.create() passes the IAM token as a separate component —
+    # no URL parsing issues with :, /, ?, &, @ in the token.
     url = URL.create(
         drivername="mysql+pymysql",
         username=user,
@@ -65,15 +51,28 @@ def create_rds_engine(database: str) -> Engine:
         database=database,
     )
 
+    # SSL is optional — only add ssl context if RDS_PEM_PATH is set
+    # and the file exists. The NLB endpoint may not require a cert.
+    connect_args: dict = {}
+    pem_path = os.getenv("RDS_PEM_PATH")
+    if pem_path and os.path.exists(pem_path):
+        import ssl
+
+        ssl_context = ssl.create_default_context(cafile=pem_path)
+        connect_args["ssl"] = ssl_context
+        log.info("SSL enabled using PEM: %s", pem_path)
+    else:
+        log.info("SSL disabled — RDS_PEM_PATH not set or file not found")
+
     engine = create_engine(
         url,
-        connect_args={"ssl": ssl_context},
+        connect_args=connect_args,
         poolclass=QueuePool,
         pool_size=5,
         max_overflow=10,
         pool_timeout=30,
         pool_recycle=600,       # IAM token expires in ~15 min; recycle well before
-        pool_pre_ping=True,     # Verify connections before checkout
+        pool_pre_ping=True,     # Verify connection is alive before checkout
         echo=False,
     )
 

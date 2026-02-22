@@ -364,8 +364,9 @@ def get_historical_runs(
         trigger_clause = " AND TRIGGER_TYPE = :trigger"
         params["trigger"] = TRIGGER_TYPE_MAP[processing_type.upper()]
 
-    # First, get the N most recent distinct business dates for this dataset
-    dates_query = f"""
+    # MySQL doesn't allow LIMIT inside a subquery used with IN.
+    # Wrap in a derived table to work around this.
+    dates_subquery = f"""
         SELECT DISTINCT business_date
         FROM WORKFLOW_RUN_INSTANCE
         WHERE output_dataset_id = :ds_id
@@ -375,7 +376,6 @@ def get_historical_runs(
         LIMIT :n_dates
     """
 
-    # Then fetch all SUCCESS runs for those dates
     query_str = f"""
         SELECT OUTPUT_DATASET_ID, DAG_RUN_ID, STATUS, TRIGGER_TYPE,
                BUSINESS_DATE, CREATED_DATE, UPDATED_DATE,
@@ -383,7 +383,9 @@ def get_historical_runs(
         FROM WORKFLOW_RUN_INSTANCE
         WHERE output_dataset_id = :ds_id
           AND STATUS = 'SUCCESS'
-          AND business_date IN ({dates_query})
+          AND business_date IN (
+              SELECT business_date FROM ({dates_subquery}) AS recent_dates
+          )
           {trigger_clause}
         ORDER BY BUSINESS_DATE DESC, CREATED_DATE DESC
         LIMIT :lim

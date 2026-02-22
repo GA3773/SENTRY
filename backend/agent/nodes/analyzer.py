@@ -47,6 +47,18 @@ def analyzer(state: SentryState) -> dict:
         analysis["summary"]["not_started"] = len(missing)
         analysis["summary"]["total_datasets"] = len(all_ds_ids)
 
+    # ---- Per-processing-type breakdown ----
+    by_processing_type: dict[str, dict[str, int]] = {}
+    for row in rows:
+        pt = row.get("processing_type", "UNKNOWN")
+        if pt not in by_processing_type:
+            by_processing_type[pt] = {"SUCCESS": 0, "FAILED": 0, "RUNNING": 0, "CANCELLED": 0, "QUEUED": 0, "total": 0}
+        status = row.get("STATUS", "UNKNOWN")
+        by_processing_type[pt]["total"] += 1
+        if status in by_processing_type[pt]:
+            by_processing_type[pt][status] += 1
+    analysis["by_processing_type"] = by_processing_type
+
     # ---- Sequence progress ----
     if batch_progress and batch_progress.get("steps"):
         steps = batch_progress["steps"]

@@ -20,6 +20,7 @@ Be direct and factual — SRE teams need actionable information, not filler.
 ## Guidelines
 - Lead with the most important information (failures, blockers)
 - Use specific numbers: "3 of 6 datasets succeeded" not "some datasets succeeded"
+- Distinguish between PRELIM and FINAL processing runs. Report each separately when both exist (e.g., "PRELIM: 7/7 complete. FINAL: not started."). If only one type exists, mention which one it is.
 - Reference sequence order when relevant: "Step 3 (sequence order 2) is blocked"
 - Include dataset IDs for failed items so SREs can investigate
 - Duration in minutes unless > 120 min, then use hours

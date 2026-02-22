@@ -79,11 +79,11 @@ Main conversational endpoint. Accepts user message, runs LangGraph agent, return
 - `suggested_queries` are contextual follow-ups the frontend renders as clickable chips
 - If agent encounters an error: `{"thread_id": "...", "response": {"text": "I couldn't query the database: connection timeout...", "error": true}}`
 
-## GET /api/chat/stream (SSE)
+## POST /api/chat/stream (SSE)
 
 Server-Sent Events endpoint for streaming agent responses as they happen.
 
-**Request:** Same JSON body as POST /api/chat, sent as query params or POST body.
+**Request:** Same JSON body as POST /api/chat, sent as POST JSON body.
 
 **SSE Event Stream:**
 ```

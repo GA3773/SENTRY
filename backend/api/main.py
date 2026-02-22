@@ -5,7 +5,7 @@ import json
 import logging
 import os
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -72,14 +72,16 @@ async def chat(req: ChatRequest):
     """
     from agent.graph import sentry_graph
 
-    business_date = req.business_date or date.today().isoformat()
-
-    # Build initial state — messages use add_messages reducer
-    input_state = {
+    # Only set fields explicitly provided by the API caller.
+    # Omitted fields retain their previous values from the MemorySaver checkpoint,
+    # enabling follow-up questions without re-specifying batch/date context.
+    input_state: dict = {
         "messages": [HumanMessage(content=req.message)],
-        "business_date": business_date,
-        "processing_type": req.processing_type,
     }
+    if req.business_date:
+        input_state["business_date"] = req.business_date
+    if req.processing_type:
+        input_state["processing_type"] = req.processing_type
 
     config = {"configurable": {"thread_id": req.thread_id}}
 
@@ -121,13 +123,13 @@ async def chat_stream(req: ChatRequest):
     """
     from agent.graph import sentry_graph
 
-    business_date = req.business_date or date.today().isoformat()
-
-    input_state = {
+    input_state: dict = {
         "messages": [HumanMessage(content=req.message)],
-        "business_date": business_date,
-        "processing_type": req.processing_type,
     }
+    if req.business_date:
+        input_state["business_date"] = req.business_date
+    if req.processing_type:
+        input_state["processing_type"] = req.processing_type
 
     config = {"configurable": {"thread_id": req.thread_id}}
 

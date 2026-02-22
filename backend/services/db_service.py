@@ -13,11 +13,10 @@ must be set well below the expiry window.
 import logging
 import os
 import ssl
-from urllib.parse import quote_plus
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Engine
+from sqlalchemy.engine import Engine, URL
 from sqlalchemy.pool import QueuePool
 
 load_dotenv()
@@ -52,14 +51,18 @@ def create_rds_engine(database: str) -> Engine:
     if not all([host, user, password]):
         raise ValueError("RDS_HOST, RDS_USER, and RDS_PASSWORD must be set in .env")
 
-    # IAM auth token contains special chars — must be URL-encoded
-    encoded_password = quote_plus(password)
-
     ssl_context = _build_ssl_context()
 
-    url = (
-        f"mysql+pymysql://{user}:{encoded_password}"
-        f"@{host}:{port}/{database}"
+    # Use URL.create() so the IAM token (which contains :, /, ?, &)
+    # is passed as a discrete component — never embedded in a string
+    # that SQLAlchemy's URL parser would try to split on delimiters.
+    url = URL.create(
+        drivername="mysql+pymysql",
+        username=user,
+        password=password,
+        host=host,
+        port=int(port),
+        database=database,
     )
 
     engine = create_engine(

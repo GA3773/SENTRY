@@ -1,13 +1,843 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SENTRY - SRE Intelligent Monitoring Platform</title>
-    <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SENTRY - SRE Intelligent Monitoring Platform</title>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --header-bg: #1a2e3b;
+    --header-text: #ffffff;
+    --accent-teal: #2fb5a0;
+    --accent-teal-hover: #28a08d;
+    --accent-teal-dim: rgba(47, 181, 160, 0.12);
+    --accent-teal-border: rgba(47, 181, 160, 0.3);
+    --body-bg: #f4f6f8;
+    --card-bg: #ffffff;
+    --text-primary: #1a2e3b;
+    --text-secondary: #5a6b7a;
+    --text-muted: #8a96a3;
+    --border-color: #e2e8ee;
+    --border-light: #f0f2f5;
+    --success: #2fb5a0;
+    --success-bg: rgba(47, 181, 160, 0.08);
+    --error: #e74c5e;
+    --error-bg: rgba(231, 76, 94, 0.08);
+    --warning: #f0a830;
+    --warning-bg: rgba(240, 168, 48, 0.08);
+    --running: #4a90d9;
+    --running-bg: rgba(74, 144, 217, 0.08);
+    --cancelled: #8a96a3;
+    --shadow-sm: 0 1px 3px rgba(26, 46, 59, 0.06);
+    --shadow-md: 0 2px 8px rgba(26, 46, 59, 0.08);
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--body-bg);
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  /* ===== HEADER ===== */
+  .header {
+    background: var(--header-bg);
+    height: 52px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .header-brand { display: flex; align-items: baseline; gap: 8px; min-width: 200px; }
+  .header-brand h1 { font-size: 20px; font-weight: 700; color: var(--header-text); letter-spacing: 1.5px; }
+  .header-brand .version { font-size: 11px; color: rgba(255,255,255,0.4); font-weight: 400; }
+  .header-nav { display: flex; align-items: center; gap: 0; margin-left: 40px; height: 100%; }
+  .header-nav a {
+    color: rgba(255,255,255,0.6); text-decoration: none; font-size: 13.5px; font-weight: 500;
+    padding: 0 18px; height: 100%; display: flex; align-items: center;
+    position: relative; transition: color 0.2s; white-space: nowrap;
+  }
+  .header-nav a:hover { color: rgba(255,255,255,0.85); }
+  .header-nav a.active { color: var(--header-text); }
+  .header-nav a::after {
+    content: ''; position: absolute; bottom: 0; left: 8px; right: 8px;
+    height: 3px; background: var(--accent-teal); border-radius: 3px 3px 0 0;
+    opacity: 0; transition: opacity 0.2s;
+  }
+  .header-nav a.active::after { opacity: 1; }
+  .header-nav a:not(.active)::after { background: rgba(47,181,160,0.4); height: 2px; opacity: 1; }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .header-icon {
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.5); cursor: pointer; border-radius: var(--radius-sm); transition: all 0.2s;
+  }
+  .header-icon:hover { color: rgba(255,255,255,0.85); background: rgba(255,255,255,0.08); }
+  .env-badge {
+    font-size: 11px; font-weight: 600; color: var(--accent-teal);
+    background: rgba(47,181,160,0.15); padding: 3px 10px; border-radius: 3px; letter-spacing: 0.5px;
+  }
+  .connection-dot {
+    width: 7px; height: 7px; background: var(--accent-teal); border-radius: 50%;
+    box-shadow: 0 0 6px rgba(47,181,160,0.5); animation: pulse-dot 2s infinite;
+  }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+  /* ===== MAIN LAYOUT ===== */
+  .main-container { display: flex; height: calc(100vh - 52px); margin-top: 52px; }
+
+  /* ===== DASHBOARD PANEL ===== */
+  .dashboard-panel { flex: 1; overflow-y: auto; padding: 20px 24px; min-width: 0; }
+  .dashboard-panel::-webkit-scrollbar { width: 6px; }
+  .dashboard-panel::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .page-title { font-size: 18px; font-weight: 600; color: var(--text-primary); }
+  .page-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+  .page-controls { display: flex; align-items: center; gap: 10px; }
+  .date-picker {
+    display: flex; align-items: center; gap: 6px; background: var(--card-bg);
+    border: 1px solid var(--border-color); border-radius: var(--radius-md);
+    padding: 6px 12px; font-size: 13px; color: var(--text-primary); cursor: pointer; font-family: inherit;
+  }
+  .date-picker svg { color: var(--text-muted); }
+  .refresh-btn {
+    display: flex; align-items: center; gap: 6px; background: none; border: none;
+    color: var(--accent-teal); font-size: 13px; font-weight: 500; cursor: pointer;
+    font-family: inherit; padding: 6px 8px; border-radius: var(--radius-sm); transition: background 0.15s;
+  }
+  .refresh-btn:hover { background: var(--accent-teal-dim); }
+
+  /* ===== SUMMARY CARDS ===== */
+  .summary-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; }
+  .summary-card {
+    background: var(--card-bg); border: 1px solid var(--border-color);
+    border-radius: var(--radius-md); padding: 14px 16px; box-shadow: var(--shadow-sm);
+  }
+  .summary-card-label {
+    font-size: 11.5px; font-weight: 500; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px;
+  }
+  .summary-card-value { font-size: 26px; font-weight: 700; line-height: 1.1; }
+  .summary-card-value.success { color: var(--success); }
+  .summary-card-value.error { color: var(--error); }
+  .summary-card-value.warning { color: var(--warning); }
+  .summary-card-value.running { color: var(--running); }
+  .summary-card-value.total { color: var(--text-primary); }
+  .summary-card-sub { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+
+  /* ===== SECTION CARD & TABLE ===== */
+  .section-card {
+    background: var(--card-bg); border: 1px solid var(--border-color);
+    border-radius: var(--radius-md); box-shadow: var(--shadow-sm); margin-bottom: 16px; overflow: hidden;
+  }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--border-color);
+    cursor: pointer; user-select: none;
+  }
+  .section-header:hover { background: rgba(0,0,0,0.01); }
+  .section-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13.5px; font-weight: 600; color: var(--text-primary);
+  }
+  .section-title svg { color: var(--text-muted); transition: transform 0.2s; }
+  .section-badge {
+    font-size: 11px; font-weight: 500; color: var(--text-muted);
+    background: var(--border-light); padding: 2px 8px; border-radius: 10px;
+  }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table thead th {
+    text-align: left; padding: 10px 14px; font-weight: 600; font-size: 12px;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px;
+    border-bottom: 1px solid var(--border-color); background: #fafbfc;
+    white-space: nowrap; position: sticky; top: 0;
+  }
+  .data-table thead th .filter-icon {
+    display: inline-flex; margin-left: 4px; color: var(--border-color);
+    cursor: pointer; vertical-align: middle;
+  }
+  .data-table thead th .filter-icon:hover { color: var(--text-muted); }
+  .data-table tbody tr {
+    border-bottom: 1px solid var(--border-light); transition: background 0.1s; cursor: pointer;
+  }
+  .data-table tbody tr:hover { background: rgba(47,181,160,0.03); }
+  .data-table tbody tr:last-child { border-bottom: none; }
+  .data-table tbody td { padding: 10px 14px; color: var(--text-primary); white-space: nowrap; }
+  .expand-arrow {
+    color: var(--text-muted); cursor: pointer; display: flex;
+    align-items: center; justify-content: center; width: 24px; transition: transform 0.2s;
+  }
+  .expand-arrow.expanded { transform: rotate(90deg); }
+  .batch-link { color: var(--accent-teal); font-weight: 500; text-decoration: none; }
+  .batch-link:hover { text-decoration: underline; }
+
+  /* Status Badges */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+    font-weight: 600; padding: 3px 10px; border-radius: 3px; letter-spacing: 0.2px;
+  }
+  .status-badge.small { font-size: 11px; padding: 2px 8px; }
+  .status-badge.success { color: var(--success); background: var(--success-bg); }
+  .status-badge.failed { color: var(--error); background: var(--error-bg); }
+  .status-badge.running { color: var(--running); background: var(--running-bg); }
+  .status-badge.warning { color: var(--warning); background: var(--warning-bg); }
+  .status-badge.cancelled { color: var(--cancelled); background: rgba(138,150,163,0.08); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.success { background: var(--success); }
+  .status-dot.failed { background: var(--error); }
+  .status-dot.running { background: var(--running); animation: pulse-dot 1.5s infinite; }
+  .status-dot.warning { background: var(--warning); }
+
+  /* Prelim/Final indicators */
+  .processing-indicators { display: flex; flex-direction: column; gap: 3px; }
+  .proc-row { display: flex; align-items: center; gap: 6px; font-size: 11.5px; }
+  .proc-label { color: var(--text-muted); font-weight: 500; width: 42px; }
+  .proc-dot { width: 7px; height: 7px; border-radius: 50%; }
+  .proc-dot.green { background: var(--success); }
+  .proc-dot.red { background: var(--error); }
+  .proc-dot.blue { background: var(--running); animation: pulse-dot 1.5s infinite; }
+  .proc-dot.grey { background: #ccd3da; }
+  .proc-dot.orange { background: var(--warning); }
+
+  /* Progress bar */
+  .progress-bar-container { width: 100%; max-width: 120px; display: flex; align-items: center; gap: 8px; }
+  .progress-track { flex: 1; height: 5px; background: var(--border-light); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
+  .progress-fill.success { background: var(--success); }
+  .progress-fill.running { background: var(--running); }
+  .progress-fill.warning { background: var(--warning); }
+  .progress-fill.error { background: var(--error); }
+  .progress-text { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); white-space: nowrap; }
+
+  /* Expanded row */
+  .expanded-row { background: #f8fafb; border-bottom: 1px solid var(--border-color); }
+  .expanded-row:hover { background: #f8fafb !important; }
+  .expanded-content { padding: 16px 14px 16px 52px; }
+  .dataset-table {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+    border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden;
+  }
+  .dataset-table thead th {
+    text-align: left; padding: 8px 12px; font-weight: 600; font-size: 11px;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px;
+    background: #f0f3f5; border-bottom: 1px solid var(--border-color);
+  }
+  .dataset-table tbody td {
+    padding: 7px 12px; border-bottom: 1px solid var(--border-light);
+    color: var(--text-primary); font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+  }
+  .dataset-table tbody tr:last-child td { border-bottom: none; }
+  .seq-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; font-size: 11px; font-weight: 600;
+    background: var(--accent-teal-dim); color: var(--accent-teal);
+    border-radius: 50%; font-family: 'Source Sans 3', sans-serif;
+  }
+  .quick-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .quick-action {
+    font-size: 11px; color: var(--text-secondary); background: white;
+    border: 1px solid var(--border-color); border-radius: 3px;
+    padding: 3px 8px; cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .quick-action:hover { border-color: var(--accent-teal); color: var(--accent-teal); }
+
+  /* View toggle */
+  .view-toggle { display: inline-flex; border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
+  .view-toggle-btn {
+    padding: 5px 12px; font-size: 12px; font-weight: 500; background: white;
+    border: none; color: var(--text-muted); cursor: pointer; font-family: inherit;
+    transition: all 0.15s; border-right: 1px solid var(--border-color);
+  }
+  .view-toggle-btn:last-child { border-right: none; }
+  .view-toggle-btn.active { background: var(--accent-teal); color: white; }
+
+  /* Timestamps & mono */
+  .timestamp { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-secondary); }
+  .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+  /* Resize handle */
+  .resize-handle { width: 4px; cursor: col-resize; background: transparent; transition: background 0.2s; flex-shrink: 0; }
+  .resize-handle:hover { background: var(--accent-teal); }
+
+  /* Severity */
+  .severity-high { border-left: 3px solid var(--error); }
+  .severity-med { border-left: 3px solid var(--warning); }
+
+  /* ===== CHAT PANEL ===== */
+  .chat-panel {
+    width: 420px; min-width: 420px; background: var(--card-bg);
+    border-left: 1px solid var(--border-color); display: flex; flex-direction: column; height: 100%;
+  }
+  .chat-header {
+    padding: 14px 18px; border-bottom: 1px solid var(--border-color);
+    display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+  }
+  .chat-header-left { display: flex; align-items: center; gap: 10px; }
+  .chat-logo {
+    width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent-teal), #1a8a7a);
+    border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 13px;
+  }
+  .chat-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .chat-status { font-size: 11px; color: var(--accent-teal); display: flex; align-items: center; gap: 4px; }
+  .chat-actions { display: flex; gap: 4px; }
+  .chat-action-btn {
+    width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+    border: none; background: none; color: var(--text-muted); cursor: pointer;
+    border-radius: var(--radius-sm); transition: all 0.15s;
+  }
+  .chat-action-btn:hover { background: var(--border-light); color: var(--text-secondary); }
+  .chat-context {
+    padding: 8px 18px; background: #f8fafb; border-bottom: 1px solid var(--border-color);
+    display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-muted); flex-shrink: 0;
+  }
+  .context-tag {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--accent-teal-dim); color: var(--accent-teal);
+    padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 500;
+  }
+  .context-tag .remove { cursor: pointer; opacity: 0.6; font-size: 13px; line-height: 1; }
+  .context-tag .remove:hover { opacity: 1; }
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 16px 18px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .chat-messages::-webkit-scrollbar { width: 5px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+  .msg { max-width: 92%; animation: msg-in 0.25s ease-out; }
+  @keyframes msg-in { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+  .msg.assistant { align-self: flex-start; }
+  .msg.user { align-self: flex-end; }
+  .msg-bubble { padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; line-height: 1.55; }
+  .msg.assistant .msg-bubble { background: #f4f6f8; color: var(--text-primary); border-bottom-left-radius: 2px; }
+  .msg.user .msg-bubble { background: var(--header-bg); color: var(--header-text); border-bottom-right-radius: 2px; }
+  .msg-label {
+    font-size: 10.5px; font-weight: 500; color: var(--text-muted);
+    margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .msg.user .msg-label { text-align: right; }
+  .msg-data-card {
+    margin-top: 8px; background: white; border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm); overflow: hidden; font-size: 12px;
+  }
+  .msg-data-header {
+    padding: 6px 10px; background: #fafbfc; border-bottom: 1px solid var(--border-color);
+    font-weight: 600; font-size: 11px; color: var(--text-secondary);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .msg-data-row {
+    padding: 5px 10px; display: flex; justify-content: space-between;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .msg-data-row:last-child { border-bottom: none; }
+  .msg-data-key { color: var(--text-muted); font-size: 11.5px; }
+  .msg-data-val { font-weight: 600; font-size: 11.5px; font-family: 'JetBrains Mono', monospace; }
+  .suggested-queries { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .suggested-chip {
+    font-size: 11.5px; color: var(--accent-teal); background: var(--accent-teal-dim);
+    border: 1px solid var(--accent-teal-border); padding: 4px 10px; border-radius: 14px;
+    cursor: pointer; transition: all 0.15s; font-family: inherit;
+  }
+  .suggested-chip:hover { background: rgba(47,181,160,0.2); }
+  .tool-call { margin: 6px 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
+  .tool-call-header {
+    display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+    background: #f8fafb; color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .tool-call-header .tool-icon { color: var(--accent-teal); }
+  .thinking-indicator { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); padding: 6px 0; }
+  .thinking-dots { display: flex; gap: 3px; }
+  .thinking-dots span { width: 5px; height: 5px; background: var(--accent-teal); border-radius: 50%; animation: thinking 1.2s infinite; }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes thinking { 0%,60%,100% { opacity:0.2; transform:scale(0.8); } 30% { opacity:1; transform:scale(1); } }
+  .chat-input-area { padding: 12px 18px 16px; border-top: 1px solid var(--border-color); flex-shrink: 0; }
+  .chat-input-wrapper {
+    display: flex; align-items: flex-end; gap: 8px; background: #f4f6f8;
+    border: 1px solid var(--border-color); border-radius: var(--radius-md);
+    padding: 8px 12px; transition: border-color 0.2s;
+  }
+  .chat-input-wrapper:focus-within { border-color: var(--accent-teal); box-shadow: 0 0 0 2px rgba(47,181,160,0.12); }
+  .chat-input {
+    flex: 1; border: none; background: none; font-size: 13px; font-family: inherit;
+    color: var(--text-primary); outline: none; resize: none; line-height: 1.4;
+    max-height: 80px; min-height: 20px;
+  }
+  .chat-input::placeholder { color: var(--text-muted); }
+  .chat-send-btn {
+    width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+    background: var(--accent-teal); color: white; border: none; border-radius: var(--radius-sm);
+    cursor: pointer; flex-shrink: 0; transition: background 0.15s;
+  }
+  .chat-send-btn:hover { background: var(--accent-teal-hover); }
+  .chat-input-hint { font-size: 10.5px; color: var(--text-muted); margin-top: 6px; padding-left: 2px; }
+  .chat-input-hint kbd {
+    background: var(--border-light); border: 1px solid var(--border-color);
+    border-radius: 3px; padding: 0 4px; font-size: 10px; font-family: 'JetBrains Mono', monospace;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <div class="header-brand">
+    <h1>SENTRY</h1>
+    <span class="version">Version: 1.0.0-alpha</span>
+  </div>
+  <nav class="header-nav">
+    <a href="#" class="active">Dashboard</a>
+    <a href="#">Batch Explorer</a>
+    <a href="#">RCA Analysis</a>
+    <a href="#">AWS Metrics</a>
+    <a href="#">Predictions</a>
+    <a href="#">Audit Log</a>
+  </nav>
+  <div class="header-right">
+    <span class="env-badge">PROD</span>
+    <div class="connection-dot" title="Connected to RDS & Airflow"></div>
+    <div class="header-icon" title="Settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </div>
+    <div class="header-icon" title="Notifications">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+    </div>
+    <div class="header-icon" title="Help">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+    </div>
+  </div>
+</header>
+
+<!-- ===== MAIN LAYOUT ===== -->
+<div class="main-container">
+
+  <!-- ===== DASHBOARD PANEL ===== -->
+  <div class="dashboard-panel">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Essentials Dashboard</div>
+        <div class="page-subtitle">Real-time batch processing status across all asset classes</div>
+      </div>
+      <div class="page-controls">
+        <div class="view-toggle" id="viewToggle">
+          <button class="view-toggle-btn active" data-type="PRELIM">PRELIM</button>
+          <button class="view-toggle-btn" data-type="FINAL">FINAL</button>
+          <button class="view-toggle-btn" data-type="ALL">ALL</button>
+        </div>
+        <div class="date-picker">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          18-Feb-2026
+        </div>
+        <button class="refresh-btn" onclick="renderDashboard()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+          REFRESH
+        </button>
+      </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-row" id="summaryCards"></div>
+
+    <!-- Essentials Table -->
+    <div class="section-card">
+      <div class="section-header">
+        <div class="section-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          All Essentials
+        </div>
+        <span class="section-badge" id="batchCount"></span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width:32px"></th>
+            <th>Essential <span class="filter-icon"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg></span></th>
+            <th>Status</th>
+            <th>Prelim / Final</th>
+            <th>Progress</th>
+            <th>Datasets</th>
+            <th>Started</th>
+            <th>Last Updated</th>
+            <th>ETA</th>
+          </tr>
+        </thead>
+        <tbody id="essentialsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="resize-handle"></div>
+
+  <!-- ===== CHAT PANEL ===== -->
+  <div class="chat-panel">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <div class="chat-logo">S</div>
+        <div>
+          <div class="chat-title">SENTRY AI</div>
+          <div class="chat-status">
+            <span class="connection-dot" style="width:5px;height:5px;"></span>
+            Connected &middot; GPT-4o
+          </div>
+        </div>
+      </div>
+      <div class="chat-actions">
+        <button class="chat-action-btn" title="New conversation"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+        <button class="chat-action-btn" title="History"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></button>
+        <button class="chat-action-btn" title="Expand"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
+      </div>
+    </div>
+    <div class="chat-context">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      Context:
+      <span class="context-tag">18-Feb-2026 <span class="remove">&times;</span></span>
+      <span class="context-tag">PROD <span class="remove">&times;</span></span>
+    </div>
+    <div class="chat-messages">
+      <div class="msg assistant">
+        <div class="msg-label">SENTRY AI</div>
+        <div class="msg-bubble">
+          Good morning. I'm monitoring all 9 essentials for <strong>18-Feb-2026</strong>. Here's a quick summary: 5 batches completed successfully, 2 are running (DERIVATIVES, COLLATERAL), 1 has failed (FR2052A), and UPC hasn't started yet.
+          <div class="suggested-queries">
+            <button class="suggested-chip">What failed in FR2052A?</button>
+            <button class="suggested-chip">DERIVATIVES ETA?</button>
+            <button class="suggested-chip">Show AWS metrics</button>
+          </div>
+        </div>
+      </div>
+      <div class="msg user">
+        <div class="msg-label">You</div>
+        <div class="msg-bubble">What failed in FR2052A? Give me the RCA.</div>
+      </div>
+      <div class="msg assistant">
+        <div class="msg-label">SENTRY AI</div>
+        <div class="msg-bubble">
+          FR2052A (6G) PRELIM failed at <strong>sequence step 3</strong>. Let me pull the details.
+          <div class="tool-call"><div class="tool-call-header"><span class="tool-icon">&#9889;</span> resolve_batch("FR2052A") &rarr; Lenz API</div></div>
+          <div class="tool-call"><div class="tool-call-header"><span class="tool-icon">&#9889;</span> get_batch_status(8 datasets, "2026-02-18", "PRELIM")</div></div>
+          <div class="tool-call"><div class="tool-call-header"><span class="tool-icon">&#9889;</span> get_task_details("FGW_6g_calc_workflow_V2_2026-02-18_...")</div></div>
+          <div class="msg-data-card severity-high">
+            <div class="msg-data-header">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--error)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+              Failed DAG: 6g_calc_workflow_V2
+            </div>
+            <div class="msg-data-row"><span class="msg-data-key">Dataset</span><span class="msg-data-val" style="color:var(--text-primary)">com.jpmc...6g_calc_results</span></div>
+            <div class="msg-data-row"><span class="msg-data-key">Failed Task</span><span class="msg-data-val" style="color:var(--error)">enrich_6g_calc_results</span></div>
+            <div class="msg-data-row"><span class="msg-data-key">Slice</span><span class="msg-data-val">6G-GLOBAL-SLICE-2</span></div>
+            <div class="msg-data-row"><span class="msg-data-key">Failed At</span><span class="msg-data-val">08:15:44 UTC</span></div>
+            <div class="msg-data-row"><span class="msg-data-key">Attempts</span><span class="msg-data-val">2 / 2</span></div>
+          </div>
+          The <code style="background:#f0f2f5;padding:1px 5px;border-radius:3px;font-size:12px;">enrich_6g_calc_results</code> task failed after 2 retries on GLOBAL-SLICE-2. Checking AWS metrics for the failure window (08:00&ndash;08:20)...
+          <div class="tool-call"><div class="tool-call-header"><span class="tool-icon">&#9889;</span> get_cloudwatch_metrics("RDS", "ReadLatency", "08:00-08:20")</div></div>
+          <div class="msg-data-card severity-med">
+            <div class="msg-data-header">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--warning)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              AWS Metric Anomaly Detected
+            </div>
+            <div class="msg-data-row"><span class="msg-data-key">RDS ReadLatency</span><span class="msg-data-val" style="color:var(--error)">&uarr; 340ms (avg: 12ms)</span></div>
+            <div class="msg-data-row"><span class="msg-data-key">RDS CPU</span><span class="msg-data-val" style="color:var(--warning)">&uarr; 89% (avg: 35%)</span></div>
+            <div class="msg-data-row"><span class="msg-data-key">SQS Age of Oldest</span><span class="msg-data-val" style="color:var(--success)">Normal (4s)</span></div>
+          </div>
+          <strong>Likely root cause:</strong> RDS read latency spiked to 340ms (28x normal) during the failure window, coinciding with 89% CPU utilization. This correlates with the enrichment task timeout. SQS metrics look normal, so the issue is database-side. Steps 0&ndash;2 completed before the spike began.
+          <div class="suggested-queries" style="margin-top:8px;">
+            <button class="suggested-chip">RDS metrics last 4 hours</button>
+            <button class="suggested-chip">Has this failed before?</button>
+            <button class="suggested-chip">Which batches depend on 6G?</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <div class="chat-input-wrapper">
+        <textarea class="chat-input" rows="1" placeholder="Ask about batch status, RCA, metrics..."></textarea>
+        <button class="chat-send-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+      </div>
+      <div class="chat-input-hint">
+        <kbd>Enter</kbd> to send &middot; <kbd>Shift+Enter</kbd> for new line &middot; Tools: Lenz, RDS, Airflow, CloudWatch
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== MOCK DATA — matches GET /api/essentials response shape exactly =====
+const MOCK_DATA = {
+  business_date: "2026-02-18",
+  timestamp: "2026-02-18T12:10:00Z",
+  summary: { total: 9, completed: 5, running: 2, failed: 1, not_started: 1 },
+  essentials: [
+    {
+      essential_name: "TB-Derivatives", display_name: "DERIVATIVES", status: "RUNNING",
+      prelim: { status: "SUCCESS", total_datasets: 6, success: 6, failed: 0, running: 0, not_started: 0, progress: "6/6", started_at: "2026-02-18T05:20:39Z", last_updated: "2026-02-18T12:08:09Z", eta: null },
+      final:  { status: "RUNNING", total_datasets: 6, success: 4, failed: 0, running: 1, not_started: 1, progress: "4/6", started_at: "2026-02-18T05:20:39Z", last_updated: "2026-02-18T12:08:09Z", eta: "~14:30" },
+      datasets: [
+        { dataset_id: "com.jpmc.ct.lri.derivatives-pb_synthetics_trs_e15", sequence_order: 0, prelim_status: "SUCCESS", final_status: "SUCCESS", slice_count: 8, slices_success: 8, slices_failed: 0, latest_dag_run_id: "FGW_pb_synthetics_trs_e15_V2_2026-02-18_DERIV-NA-SLICE-1_1771403209811", duration_minutes: 102, created_date: "2026-02-18T05:20:00Z", updated_date: "2026-02-18T07:02:00Z" },
+        { dataset_id: "com.jpmc.ct.lri.derivatives-slsline_calculator_e15", sequence_order: 0, prelim_status: "SUCCESS", final_status: "SUCCESS", slice_count: 10, slices_success: 10, slices_failed: 0, latest_dag_run_id: "FGW_slsline_calculator_e15_V2_2026-02-18_DERIV-EMEA-SLICE-1_1771403209812", duration_minutes: 131, created_date: "2026-02-18T05:23:00Z", updated_date: "2026-02-18T07:34:00Z" },
+        { dataset_id: "com.jpmc.ct.lri.derivatives-calc_intercompany_fx_adj_e15", sequence_order: 1, prelim_status: "SUCCESS", final_status: "SUCCESS", slice_count: 4, slices_success: 4, slices_failed: 0, latest_dag_run_id: "FGW_calc_intercompany_fx_V2_2026-02-18_GLOBAL_1771403209813", duration_minutes: 45, created_date: "2026-02-18T07:35:00Z", updated_date: "2026-02-18T08:20:00Z" },
+        { dataset_id: "com.jpmc.ct.lri.derivatives-calc_secured_vs_unsecured_e15", sequence_order: 2, prelim_status: "SUCCESS", final_status: "SUCCESS", slice_count: 3, slices_success: 3, slices_failed: 0, latest_dag_run_id: "FGW_calc_secured_unsecured_V2_2026-02-18_GLOBAL_1771403209814", duration_minutes: 38, created_date: "2026-02-18T08:22:00Z", updated_date: "2026-02-18T09:00:00Z" },
+        { dataset_id: "com.jpmc.ct.lri.cfg-contractual_cash_flow_results_v1", sequence_order: 3, prelim_status: "SUCCESS", final_status: "RUNNING", slice_count: 6, slices_success: 3, slices_failed: 0, latest_dag_run_id: "FGW_contractual_cf_V2_2026-02-18_CFG-SLICE-1_1771403209815", duration_minutes: 185, created_date: "2026-02-18T09:04:00Z", updated_date: "2026-02-18T12:09:00Z" },
+        { dataset_id: "com.jpmc.ct.lri.sls-sls_aws_details_extended_v1", sequence_order: 4, prelim_status: "SUCCESS", final_status: "NOT_STARTED", slice_count: 0, slices_success: 0, slices_failed: 0, latest_dag_run_id: "", duration_minutes: 0, created_date: null, updated_date: null }
+      ]
+    },
+    {
+      essential_name: "TB-Securities", display_name: "SECURITIES", status: "SUCCESS",
+      prelim: { status: "SUCCESS", total_datasets: 8, success: 8, failed: 0, running: 0, not_started: 0, progress: "8/8", started_at: "2026-02-18T04:15:22Z", last_updated: "2026-02-18T11:42:18Z", eta: null },
+      final:  { status: "SUCCESS", total_datasets: 8, success: 8, failed: 0, running: 0, not_started: 0, progress: "8/8", started_at: "2026-02-18T04:15:22Z", last_updated: "2026-02-18T11:42:18Z", eta: null },
+      datasets: []
+    },
+    {
+      essential_name: "6G-FR2052a-E2E", display_name: "FR2052A (6G)", status: "FAILED",
+      prelim: { status: "FAILED", total_datasets: 8, success: 3, failed: 1, running: 0, not_started: 4, progress: "3/8", started_at: "2026-02-18T04:30:10Z", last_updated: "2026-02-18T08:15:44Z", eta: null },
+      final:  { status: "NOT_STARTED", total_datasets: 8, success: 0, failed: 0, running: 0, not_started: 8, progress: "0/8", started_at: null, last_updated: null, eta: null },
+      datasets: []
+    },
+    {
+      essential_name: "PBSynthetics", display_name: "PBSynthetics", status: "SUCCESS",
+      prelim: { status: "SUCCESS", total_datasets: 5, success: 5, failed: 0, running: 0, not_started: 0, progress: "5/5", started_at: "2026-02-18T05:00:15Z", last_updated: "2026-02-18T10:28:33Z", eta: null },
+      final:  { status: "SUCCESS", total_datasets: 5, success: 5, failed: 0, running: 0, not_started: 0, progress: "5/5", started_at: "2026-02-18T05:00:15Z", last_updated: "2026-02-18T10:28:33Z", eta: null },
+      datasets: []
+    },
+    {
+      essential_name: "SNU", display_name: "SNU", status: "SUCCESS",
+      prelim: { status: "SUCCESS", total_datasets: 22, success: 22, failed: 0, running: 0, not_started: 0, progress: "22/22", started_at: "2026-02-18T05:20:39Z", last_updated: "2026-02-18T12:09:38Z", eta: null },
+      final:  { status: "SUCCESS", total_datasets: 22, success: 22, failed: 0, running: 0, not_started: 0, progress: "22/22", started_at: "2026-02-18T05:20:39Z", last_updated: "2026-02-18T12:09:38Z", eta: null },
+      datasets: []
+    },
+    {
+      essential_name: "TB-Collateral", display_name: "COLLATERAL", status: "RUNNING",
+      prelim: { status: "SUCCESS", total_datasets: 11, success: 11, failed: 0, running: 0, not_started: 0, progress: "11/11", started_at: "2026-02-18T04:45:11Z", last_updated: "2026-02-18T12:05:22Z", eta: null },
+      final:  { status: "RUNNING", total_datasets: 11, success: 9, failed: 0, running: 2, not_started: 0, progress: "9/11", started_at: "2026-02-18T04:45:11Z", last_updated: "2026-02-18T12:05:22Z", eta: "~13:15" },
+      datasets: []
+    },
+    {
+      essential_name: "TB-SMAA", display_name: "SMAA", status: "SUCCESS",
+      prelim: { status: "SUCCESS", total_datasets: 4, success: 4, failed: 0, running: 0, not_started: 0, progress: "4/4", started_at: "2026-02-18T04:50:08Z", last_updated: "2026-02-18T09:33:17Z", eta: null },
+      final:  { status: "SUCCESS", total_datasets: 4, success: 4, failed: 0, running: 0, not_started: 0, progress: "4/4", started_at: "2026-02-18T04:50:08Z", last_updated: "2026-02-18T09:33:17Z", eta: null },
+      datasets: []
+    },
+    {
+      essential_name: "TB-SecFIn", display_name: "SECFIN", status: "SUCCESS",
+      prelim: { status: "SUCCESS", total_datasets: 7, success: 7, failed: 0, running: 0, not_started: 0, progress: "7/7", started_at: "2026-02-18T05:10:45Z", last_updated: "2026-02-18T11:15:09Z", eta: null },
+      final:  { status: "SUCCESS", total_datasets: 7, success: 7, failed: 0, running: 0, not_started: 0, progress: "7/7", started_at: "2026-02-18T05:10:45Z", last_updated: "2026-02-18T11:15:09Z", eta: null },
+      datasets: []
+    },
+    {
+      essential_name: "UPC", display_name: "UPC", status: "WAITING",
+      prelim: { status: "NOT_STARTED", total_datasets: 6, success: 0, failed: 0, running: 0, not_started: 6, progress: "0/6", started_at: null, last_updated: null, eta: "~16:00" },
+      final:  { status: "NOT_STARTED", total_datasets: 6, success: 0, failed: 0, running: 0, not_started: 6, progress: "0/6", started_at: null, last_updated: null, eta: null },
+      datasets: []
+    }
+  ]
+};
+
+// ===== STATE =====
+let currentProcessingType = "PRELIM";
+let expandedEssential = "TB-Derivatives";
+
+// ===== HELPERS =====
+const CHEVRON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>';
+
+function formatTime(iso) {
+  if (!iso) return "\u2014";
+  const d = new Date(iso);
+  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function formatDuration(min) {
+  if (!min) return "\u2014";
+  const h = Math.floor(min / 60), m = min % 60;
+  return h > 0 ? h + "h " + m + "m" : m + "m";
+}
+
+function statusBadgeClass(s) {
+  s = s.toUpperCase();
+  if (s === "SUCCESS") return "success";
+  if (s === "FAILED" || s === "PARTIAL_FAILURE") return "failed";
+  if (s === "RUNNING") return "running";
+  if (s === "WAITING" || s === "NOT_STARTED") return "warning";
+  return "cancelled";
+}
+
+function statusLabel(s) {
+  s = s.toUpperCase();
+  if (s === "NOT_STARTED") return "PENDING";
+  if (s === "PARTIAL_FAILURE") return "FAILED";
+  return s;
+}
+
+function procDotClass(s) {
+  s = s.toUpperCase();
+  if (s === "SUCCESS") return "green";
+  if (s === "FAILED" || s === "PARTIAL_FAILURE") return "red";
+  if (s === "RUNNING") return "blue";
+  if (s === "WAITING") return "orange";
+  return "grey";
+}
+
+function progressFillClass(s) {
+  s = s.toUpperCase();
+  if (s === "SUCCESS") return "success";
+  if (s === "FAILED" || s === "PARTIAL_FAILURE") return "error";
+  if (s === "RUNNING") return "running";
+  return "warning";
+}
+
+function getProc(ess, type) {
+  if (type === "FINAL") return ess.final;
+  return ess.prelim;
+}
+
+function getStatus(ess, type) {
+  if (type === "PRELIM") return ess.prelim.status;
+  if (type === "FINAL") return ess.final.status;
+  return ess.status;
+}
+
+function getEta(ess, type) {
+  const proc = getProc(ess, type);
+  if (proc.status === "SUCCESS") return "Done";
+  if (proc.status === "FAILED" || proc.status === "PARTIAL_FAILURE") return "Blocked";
+  return proc.eta || "\u2014";
+}
+
+function getDatasetStatus(ds, type) {
+  return type === "FINAL" ? ds.final_status : ds.prelim_status;
+}
+
+function extractDagId(dagRunId) {
+  if (!dagRunId) return "\u2014";
+  const parts = dagRunId.split("_");
+  return parts.slice(1, parts.length - 2).join("_");
+}
+
+// ===== RENDER SUMMARY CARDS =====
+function renderSummary(data) {
+  document.getElementById("summaryCards").innerHTML = `
+    <div class="summary-card"><div class="summary-card-label">Total Batches</div><div class="summary-card-value total">${data.summary.total}</div><div class="summary-card-sub">Tracking today</div></div>
+    <div class="summary-card"><div class="summary-card-label">Completed</div><div class="summary-card-value success">${data.summary.completed}</div><div class="summary-card-sub">All steps success</div></div>
+    <div class="summary-card"><div class="summary-card-label">Running</div><div class="summary-card-value running">${data.summary.running}</div><div class="summary-card-sub">In progress</div></div>
+    <div class="summary-card"><div class="summary-card-label">Failed</div><div class="summary-card-value error">${data.summary.failed}</div><div class="summary-card-sub">Needs attention</div></div>
+    <div class="summary-card"><div class="summary-card-label">Not Started</div><div class="summary-card-value warning">${data.summary.not_started}</div><div class="summary-card-sub">Pending trigger</div></div>
+  `;
+}
+
+// ===== RENDER EXPANDED ROW =====
+function renderExpandedRow(ess, type) {
+  const ds = ess.datasets;
+  if (!ds.length) return "";
+  let rows = ds.map(d => {
+    const st = getDatasetStatus(d, type);
+    const cls = statusBadgeClass(st);
+    const lbl = statusLabel(st);
+    const slices = d.slice_count > 0 ? d.slices_success + "/" + d.slice_count : "\u2014";
+    const started = d.created_date ? new Date(d.created_date).toLocaleTimeString("en-GB", {hour:"2-digit",minute:"2-digit"}) : "\u2014";
+    const dur = st === "RUNNING" ? formatDuration(d.duration_minutes) + "..." : formatDuration(d.duration_minutes);
+    return `<tr>
+      <td><span class="seq-badge">${d.sequence_order}</span></td>
+      <td>${d.dataset_id}</td>
+      <td>${extractDagId(d.latest_dag_run_id)}</td>
+      <td><span class="status-badge small ${cls}">${cls !== "cancelled" ? '<span class="status-dot '+cls+'"></span>' : ""}${lbl}</span></td>
+      <td>${slices}</td>
+      <td>${started}</td>
+      <td>${dur}</td>
+    </tr>`;
+  }).join("");
+
+  return `<tr class="expanded-row"><td colspan="9"><div class="expanded-content">
+    <table class="dataset-table"><thead><tr><th>Seq</th><th>Dataset ID</th><th>DAG ID</th><th>Status</th><th>Slices</th><th>Started</th><th>Duration</th></tr></thead>
+    <tbody>${rows}</tbody></table>
+    <div class="quick-actions"><button class="quick-action">View Task Details</button><button class="quick-action">RCA for Failed</button><button class="quick-action">AWS Metrics</button><button class="quick-action">Ask SENTRY AI</button></div>
+  </div></td></tr>`;
+}
+
+// ===== RENDER TABLE =====
+function renderTable(data, type) {
+  const body = document.getElementById("essentialsBody");
+  document.getElementById("batchCount").textContent = data.essentials.length + " batches";
+  let html = "";
+
+  data.essentials.forEach(ess => {
+    const isExpanded = expandedEssential === ess.essential_name;
+    const status = getStatus(ess, type);
+    const cls = statusBadgeClass(status);
+    const lbl = statusLabel(status);
+    const proc = getProc(ess, type);
+    const pct = proc.total_datasets > 0 ? Math.round((proc.success / proc.total_datasets) * 100) : 0;
+    const eta = getEta(ess, type);
+    const etaStyle = eta === "Blocked" ? ' style="color:var(--error)"' : "";
+
+    html += `<tr class="${isExpanded ? "row-expanded" : ""}" data-essential="${ess.essential_name}" onclick="toggleRow('${ess.essential_name}')" style="${isExpanded ? "background:rgba(47,181,160,0.03)" : ""}">
+      <td><span class="expand-arrow${isExpanded ? " expanded" : ""}">${CHEVRON_SVG}</span></td>
+      <td><a class="batch-link" href="#" onclick="event.preventDefault()">${ess.display_name}</a></td>
+      <td><span class="status-badge ${cls}">${cls !== "cancelled" ? '<span class="status-dot '+cls+'"></span>' : ""}${lbl}</span></td>
+      <td><div class="processing-indicators">
+        <div class="proc-row"><span class="proc-label">Prelim:</span> <span class="proc-dot ${procDotClass(ess.prelim.status)}"></span></div>
+        <div class="proc-row"><span class="proc-label">Final:</span> <span class="proc-dot ${procDotClass(ess.final.status)}"></span></div>
+      </div></td>
+      <td><div class="progress-bar-container"><div class="progress-track"><div class="progress-fill ${progressFillClass(status)}" style="width:${pct}%"></div></div><span class="progress-text">${proc.progress}</span></div></td>
+      <td class="mono">${proc.total_datasets}</td>
+      <td class="timestamp">${formatTime(proc.started_at)}</td>
+      <td class="timestamp">${formatTime(proc.last_updated)}</td>
+      <td class="timestamp"${etaStyle}>${eta}</td>
+    </tr>`;
+
+    if (isExpanded) {
+      html += renderExpandedRow(ess, type);
+    }
+  });
+
+  body.innerHTML = html;
+}
+
+// ===== TOGGLE EXPAND =====
+function toggleRow(name) {
+  expandedEssential = expandedEssential === name ? null : name;
+  renderTable(MOCK_DATA, currentProcessingType);
+}
+
+// ===== RENDER ALL =====
+function renderDashboard() {
+  renderSummary(MOCK_DATA);
+  renderTable(MOCK_DATA, currentProcessingType);
+}
+
+// ===== VIEW TOGGLE =====
+document.getElementById("viewToggle").addEventListener("click", function(e) {
+  const btn = e.target.closest(".view-toggle-btn");
+  if (!btn) return;
+  currentProcessingType = btn.dataset.type;
+  this.querySelectorAll(".view-toggle-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  renderTable(MOCK_DATA, currentProcessingType);
+});
+
+// ===== NAV TABS =====
+document.querySelector(".header-nav").addEventListener("click", function(e) {
+  const a = e.target.closest("a");
+  if (!a) return;
+  e.preventDefault();
+  this.querySelectorAll("a").forEach(l => l.classList.remove("active"));
+  a.classList.add("active");
+});
+
+// ===== INIT =====
+renderDashboard();
+</script>
+
+</body>
 </html>

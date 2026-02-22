@@ -5,12 +5,12 @@
 ### 1.1 Project Setup
 - [x] Initialize Python project with pyproject.toml (Python 3.11+)
 - [x] Set up FastAPI backend skeleton with `uvicorn` entry point
-- [x] Create requirements.txt with all dependencies (fastapi, uvicorn[standard], sse-starlette, langgraph, langchain, langchain-openai, langchain-community, sqlalchemy, pymysql, pydantic, python-dotenv, httpx, cryptography, sqlparse)
+- [x] Create requirements.txt with all dependencies (fastapi, uvicorn[standard], sse-starlette, langgraph, langchain, langchain-openai, langchain-community, sqlalchemy, pymysql, pydantic, python-dotenv, httpx, httpx-ntlm, requests, requests-ntlm, cryptography, sqlparse, azure-identity, jinja2)
 - [x] Create .env.example with all required variables
-- [ ] Set up React + TypeScript frontend with Vite (runs separately via `npm run dev`)
+- [x] Set up frontend directory: frontend/templates/ (Jinja2) + frontend/static/ (CSS, JS) — served by FastAPI, no build step
 - [x] Configure SQLAlchemy connection pools for both databases (FINEGRAINED_WORKFLOW, airflow)
 - [x] Verify RDS connectivity with test queries
-- [x] Configure Azure OpenAI client (follow pattern from @docs/connectivity.md)
+- [x] Configure Azure OpenAI client with hybrid auth (follow EXACT pattern from @docs/connectivity.md — SPN cert Bearer token + API key via default_headers)
 - [ ] Set up LangSmith/LangFuse for agent tracing
 
 ### 1.2 Lenz Service
@@ -20,7 +20,7 @@
 - [x] Implement EssentialDef and DatasetDef Pydantic models
 - [x] Implement cache with TTL (default 300s)
 - [x] Pre-fetch all essentials on startup
-- [ ] Add /api/lenz/refresh endpoint for manual cache invalidation
+- [x] Add /api/lenz/refresh endpoint for manual cache invalidation
 - [x] Write tests: name resolution, response parsing, cache behavior
 
 ### 1.3 Tier 1 Tools (Parameterized Queries)
@@ -33,62 +33,60 @@
 - [x] Write tests with sample data from @docs/data-model.md
 
 ### 1.4 LangGraph Agent
-- [ ] Define SentryState TypedDict
-- [ ] Implement intent_classifier node
-- [ ] Implement batch_resolver node (calls LenzService)
-- [ ] Implement data_fetcher node (calls Tier 1 tools)
-- [ ] Implement analyzer node (sequence-aware status aggregation)
-- [ ] Implement response_synthesizer node
-- [ ] Define conditional edges (see @docs/architecture.md for routing)
-- [ ] Set up LangGraph MemorySaver (in-memory checkpointing) for session state
-- [ ] Implement conversation context management (remembers batch + date across turns via thread_id)
+- [x] Define SentryState TypedDict
+- [x] Implement intent_classifier node
+- [x] Implement batch_resolver node (calls LenzService)
+- [x] Implement data_fetcher node (calls Tier 1 tools)
+- [x] Implement analyzer node (sequence-aware status aggregation)
+- [x] Implement response_synthesizer node
+- [x] Define conditional edges (see @docs/architecture.md for routing)
+- [x] Set up LangGraph MemorySaver (in-memory checkpointing) for session state
+- [x] Implement conversation context management (remembers batch + date across turns via thread_id)
 - [ ] Write integration tests: full agent flow for status query
 
 ### 1.5 Backend API
-- [ ] FastAPI app with CORS configuration
-- [ ] Implement all endpoints per @docs/api-contracts.md:
-- [ ] POST /api/chat — main chat endpoint (accepts message, returns agent response with structured_data, tool_calls, suggested_queries)
-- [ ] GET /api/chat/stream — SSE streaming responses with node-level progress events
-- [ ] GET /api/status/{essential_name} — direct status endpoint (bypasses agent)
-- [ ] GET /api/essentials — list all essentials with current status, dataset-level detail
-- [ ] GET /api/health — health check (DB connectivity, Lenz reachability, Azure OpenAI config)
-- [ ] GET /api/lenz/refresh — force-refresh Lenz cache
+- [x] FastAPI app with Jinja2 template engine and static file mounting
+- [x] GET / route serving dashboard.html template
+- [x] Implement all endpoints per @docs/api-contracts.md:
+- [x] POST /api/chat — main chat endpoint (accepts message, returns agent response with structured_data, tool_calls, suggested_queries)
+- [x] POST /api/chat/stream — SSE streaming responses with node-level progress events
+- [x] GET /api/status/{essential_name} — direct status endpoint (bypasses agent)
+- [x] GET /api/essentials — list all essentials with current status, dataset-level detail
+- [x] GET /api/health — health check (DB connectivity, Lenz reachability, Azure OpenAI config)
+- [x] GET /api/lenz/refresh — force-refresh Lenz cache
 
-### 1.6 Frontend — Dashboard
-- [ ] React + TypeScript project setup (Vite)
-- [ ] Implement LRI-Labs design system tokens as CSS variables (EXACT values from @docs/ui-design.md)
-- [ ] Import Source Sans 3 and JetBrains Mono fonts
-- [ ] Header component (brand, nav, env badge, icons)
-- [ ] Summary cards row (total, completed, running, failed, not started)
-- [ ] Essentials data table with expandable rows
-- [ ] Expanded row: dataset table with sequence badges, slice counts
-- [ ] Status badges component (SUCCESS, FAILED, RUNNING, etc.)
-- [ ] Prelim/Final indicator dots
-- [ ] Progress bar component
-- [ ] Date picker and processing type toggle (PRELIM/FINAL/ALL)
-- [ ] Auto-refresh mechanism (configurable interval)
-- [ ] **IMPORTANT**: Match @docs/ui-reference.html PIXEL-PERFECTLY
+### 1.6 Frontend — Dashboard (Vanilla HTML/CSS/JS + Jinja2)
+- [x] Create frontend/templates/ and frontend/static/ directory structure
+- [x] base.html: Jinja2 base template with head, Google Fonts, CSS/JS includes, layout shell
+- [x] sentry.css: Single stylesheet with ALL LRI-Labs design tokens from @docs/ui-design.md
+- [x] partials/header.html: Header bar (brand, nav tabs, env badge, connection dot, icons)
+- [x] partials/summary_cards.html: 5 summary stat cards with IDs for JS updates
+- [x] partials/essentials_table.html: Data table with expandable rows, populated by JS
+- [x] dashboard.js: Fetch /api/essentials, render table rows, expand/collapse, toggles, refresh
+- [x] utils.js: Shared helpers (formatDate, generateUUID, formatDuration, DOM helpers)
+- [x] Status badges, Prelim/Final dots, progress bars — all in sentry.css
+- [x] Date picker and PRELIM/FINAL/ALL toggle wired to re-fetch API
+- [x] Auto-refresh via setInterval (60s default)
+- [x] **IMPORTANT**: Match @docs/ui-reference.html PIXEL-PERFECTLY
 
-### 1.7 Frontend — Chat Panel
-- [ ] Split-panel layout (dashboard left, chat right)
-- [ ] Chat header with connection status
-- [ ] Context bar with active filters (date, env)
-- [ ] Message bubbles (assistant=left grey, user=right dark)
-- [ ] Tool call display cards (collapsible, monospace)
-- [ ] Inline data cards in responses (with severity left-border)
-- [ ] Suggested query chips (clickable)
-- [ ] Thinking/typing indicator (animated dots)
-- [ ] Chat input with send button
-- [ ] SSE (EventSource) connection for streaming agent responses
-- [ ] Message history within session
-- [ ] "Ask SENTRY AI" button in expanded row links to chat with pre-filled context
+### 1.7 Frontend — Chat Panel (Vanilla JS + EventSource SSE)
+- [x] partials/chat_panel.html: Chat panel structure (header, context bar, messages, input)
+- [x] chat.js: Full chat logic — message rendering, send flow, tool call cards, data cards
+- [x] SSE streaming via fetch() ReadableStream for POST-based /api/chat/stream
+- [x] Thinking indicator with animated dots and dynamic status text
+- [x] Suggested query chips (clickable, pre-fill and send)
+- [x] Tool call display cards (collapsible, monospace)
+- [x] Inline data cards with severity left-border (red/orange/blue)
+- [x] Thread ID management (UUID per conversation, new chat button resets)
+- [x] Context bar synced with dashboard date picker and processing type toggle
+- [x] "Ask SENTRY AI" button in expanded rows → pre-fills and sends chat query
 
 ## Phase 2: Tier 2 SQL Analyst (Weeks 7-10)
 
 ### 2.1 Tier 2 Constrained SQL
 - [ ] Implement ConstrainedSQLExecutor with all guardrails
 - [ ] Auto-discover schema via LangChain SQLDatabase at startup
-- [ ] Build domain_rules.py with static rules (TRIGGER_TYPE, DAG_RUN_ID format, etc.)
+- [x] Build domain_rules.py with static rules (TRIGGER_TYPE, DAG_RUN_ID format, etc.)
 - [ ] Create sql_examples.json with 15-20 curated question→SQL pairs
 - [ ] Set up InMemoryVectorStore for few-shot retrieval
 - [ ] Implement sql_analyst LangGraph node
